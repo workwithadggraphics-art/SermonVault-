@@ -637,40 +637,63 @@ function startRecording() {
   transcript = '';
   audioChunks = [];
 
-  // Speech recognition
-  recognition = new SR();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = 'en-NG';
-  recognition.onresult = (e) => {
-    let interim = '', final = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) final += e.results[i][0].transcript + ' ';
-      else interim += e.results[i][0].transcript;
-    }
-    transcript += final;
-    const box = document.getElementById('transcript-box');
-    box.textContent = transcript + interim;
-    box.classList.add('show');
-    document.getElementById('transcript-label').style.display = 'block';
-  };
-  recognition.onerror = (e) => { if (e.error !== 'aborted') showToast('Mic error: ' + e.error); stopRecording(); };
-  recognition.start();
-
-  // MediaRecorder for audio capture
+  // Request mic permission FIRST — then start speech + audio together
+  // This prevents Android Chrome from blocking SpeechRecognition due to permission race
   navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-    mediaRecorder = new MediaRecorder(stream);
-    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
-    mediaRecorder.onstop = () => {
-      audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-      audioURL = URL.createObjectURL(audioBlob);
-      const bar = document.getElementById('audio-bar');
-      document.getElementById('audio-label').textContent = `Recording — ${formatDuration(recSeconds)}`;
-      bar.classList.add('show');
-      stream.getTracks().forEach(t => t.stop());
+
+    // ── MediaRecorder (raw audio backup) ──
+    try {
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+      mediaRecorder.onstop = () => {
+        audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        audioURL = URL.createObjectURL(audioBlob);
+        document.getElementById('audio-label').textContent = `Recording — ${formatDuration(recSeconds)}`;
+        document.getElementById('audio-bar').classList.add('show');
+        stream.getTracks().forEach(t => t.stop());
+      };
+      mediaRecorder.start();
+    } catch(e) { stream.getTracks().forEach(t => t.stop()); }
+
+    // ── SpeechRecognition — starts after mic is confirmed open ──
+    recognition = new SR();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      document.getElementById('mic-status').textContent = 'Listening… speak now';
     };
-    mediaRecorder.start();
-  }).catch(() => {}); // audio recording is bonus; continue even if denied
+    recognition.onresult = (e) => {
+      let interim = '', final = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript + ' ';
+        else interim += e.results[i][0].transcript;
+      }
+      transcript += final;
+      const box = document.getElementById('transcript-box');
+      box.textContent = transcript + interim;
+      box.classList.add('show');
+      document.getElementById('transcript-label').style.display = 'block';
+    };
+    recognition.onerror = (e) => {
+      console.warn('Speech error:', e.error);
+      if (e.error === 'not-allowed') { showToast('Microphone permission denied'); stopRecording(); }
+      // no-speech / network errors: just continue, don't stop
+    };
+    // Android Chrome ends recognition after silence — auto-restart while still recording
+    recognition.onend = () => {
+      if (recording) {
+        try { recognition.start(); } catch(ex) { console.warn('Restart failed:', ex); }
+      }
+    };
+    recognition.start();
+
+  }).catch(err => {
+    console.error('Mic access denied:', err);
+    showToast('Please allow microphone access');
+  });
 
   recording = true; recSeconds = 0;
   recTimer = setInterval(() => {
@@ -683,21 +706,26 @@ function startRecording() {
   document.getElementById('mic-btn').classList.add('recording');
   document.getElementById('mic-btn').textContent = '⏹️';
   document.getElementById('mic-ripple').classList.add('pulsing');
-  document.getElementById('mic-status').textContent = 'Recording… speak freely';
+  document.getElementById('mic-status').textContent = 'Starting…';
   document.getElementById('mic-status').classList.add('recording');
 }
 
 function stopRecording() {
-  if (recognition) { recognition.stop(); recognition = null; }
+  recording = false; // set false first so recognition.onend doesn't restart
+  if (recognition) { try { recognition.stop(); } catch(e){} recognition = null; }
   if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-  recording = false;
   clearInterval(recTimer);
   document.getElementById('mic-btn').classList.remove('recording');
   document.getElementById('mic-btn').textContent = '🎙️';
   document.getElementById('mic-ripple').classList.remove('pulsing');
-  document.getElementById('mic-status').textContent = 'Recording stopped';
   document.getElementById('mic-status').classList.remove('recording');
-  if (transcript.trim()) document.getElementById('process-btn').classList.add('show');
+  if (transcript.trim()) {
+    document.getElementById('mic-status').textContent = 'Captured ✓ — ready to structure';
+    document.getElementById('process-btn').classList.add('show');
+  } else {
+    // Speech API got nothing — show a retry prompt
+    document.getElementById('mic-status').textContent = 'Nothing captured. Record again and speak clearly.';
+  }
 }
 
 function toggleAudioPlayback() {
@@ -727,7 +755,7 @@ async function processSermon() {
   const btn = document.getElementById('process-btn');
   const preacher = document.getElementById('preacher-name').value.trim() || 'Unknown Preacher';
   const titleInput = document.getElementById('sermon-title-input').value.trim();
-  if (!transcript.trim()) { showToast('No transcript to process'); return; }
+  if (!transcript.trim()) { showToast('Nothing captured — please record again'); return; }
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Structuring with AI…';
 
@@ -1198,20 +1226,43 @@ function showToast(msg) {
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredInstallPrompt = e;
-  document.getElementById('install-banner').classList.add('show');
+  // Show banner after a short delay so it doesn't interrupt auth flow
+  setTimeout(() => {
+    if (deferredInstallPrompt) document.getElementById('install-banner').classList.add('show');
+  }, 3000);
 });
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  dismissInstall();
+  showToast('SermonVault installed! 🎉');
+});
+
 document.getElementById('install-btn').addEventListener('click', async () => {
   if (!deferredInstallPrompt) return;
   deferredInstallPrompt.prompt();
   const { outcome } = await deferredInstallPrompt.userChoice;
-  if (outcome === 'accepted') showToast('SermonVault installed! 🎉');
   deferredInstallPrompt = null;
   dismissInstall();
 });
 function dismissInstall() { document.getElementById('install-banner').classList.remove('show'); }
 
+// Register service worker
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  navigator.serviceWorker.register('./sw.js', { scope: './' })
+    .then(reg => {
+      console.log('SW registered:', reg.scope);
+      // Check for updates
+      reg.addEventListener('updatefound', () => {
+        const worker = reg.installing;
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+            showToast('App updated — refresh for the latest');
+          }
+        });
+      });
+    })
+    .catch(err => console.warn('SW failed:', err));
 }
 </script>
 
@@ -1219,142 +1270,414 @@ if ('serviceWorker' in navigator) {
 <script>
 (function(){
   const canvas = document.getElementById('church-canvas');
-  if (!canvas) return;
+  if(!canvas) return;
   const ctx = canvas.getContext('2d');
-  let W, H, raf, t = 0;
+  let W, H, raf = null, t = 0, running = false;
 
-  const MOTES = Array.from({length:55},()=>({
-    x:Math.random(), y:Math.random(),
-    r:0.6+Math.random()*1.4,
-    speed:0.00008+Math.random()*0.00015,
-    drift:(Math.random()-0.5)*0.00012,
-    alpha:0.08+Math.random()*0.25,
-    phase:Math.random()*Math.PI*2
+  // ── Particles: dust motes in light beams ──
+  const MOTES = Array.from({length: 90}, () => ({
+    x: Math.random(), y: Math.random(),
+    r: 0.4 + Math.random() * 2.2,
+    vy: -(0.00006 + Math.random() * 0.00018),
+    vx: (Math.random() - 0.5) * 0.00008,
+    alpha: 0.04 + Math.random() * 0.32,
+    phase: Math.random() * Math.PI * 2,
+    twinkleSpeed: 0.0005 + Math.random() * 0.002
   }));
 
+  // ── Light beams from high stained-glass windows ──
   const BEAMS = [
-    {x:0.28,angle:0.18,width:0.09,color:[201,168,76],alpha:0.07},
-    {x:0.50,angle:0.00,width:0.13,color:[245,240,232],alpha:0.09},
-    {x:0.72,angle:-0.18,width:0.09,color:[201,168,76],alpha:0.07},
-    {x:0.38,angle:0.08,width:0.06,color:[138,106,173],alpha:0.05},
-    {x:0.62,angle:-0.08,width:0.06,color:[138,106,173],alpha:0.05},
+    { x:0.18, angle: 0.22,  w: 0.10, r:255, g:210, b:120, a:0.13 },
+    { x:0.35, angle: 0.10,  w: 0.08, r:201, g:168, b:76,  a:0.10 },
+    { x:0.50, angle: 0.00,  w: 0.16, r:245, g:235, b:200, a:0.15 },
+    { x:0.65, angle:-0.10,  w: 0.08, r:201, g:168, b:76,  a:0.10 },
+    { x:0.82, angle:-0.22,  w: 0.10, r:255, g:210, b:120, a:0.13 },
+    { x:0.28, angle: 0.06,  w: 0.05, r:160, g:120, b:210, a:0.07 },
+    { x:0.72, angle:-0.06,  w: 0.05, r:160, g:120, b:210, a:0.07 },
   ];
 
-  const CONGREGATION = [];
-  function buildCongregation() {
-    CONGREGATION.length = 0;
-    [{y:0.74,count:9,scale:1.0},{y:0.80,count:11,scale:0.88},{y:0.86,count:13,scale:0.76}].forEach(row=>{
-      const sp = 1/(row.count+1);
-      for(let i=1;i<=row.count;i++) CONGREGATION.push({
-        x:i*sp+(Math.random()-0.5)*sp*0.3, y:row.y,
-        scale:row.scale*(0.88+Math.random()*0.24),
-        sway:(Math.random()-0.5)*0.003,
-        swayPhase:Math.random()*Math.PI*2,
-        raised:Math.random()<0.25
-      });
+  // ── Congregation figures ──
+  const CROWD = [];
+  function buildCrowd() {
+    CROWD.length = 0;
+    const rows = [
+      { y:0.71, n:8,  sc:1.00 },
+      { y:0.77, n:11, sc:0.90 },
+      { y:0.83, n:14, sc:0.80 },
+      { y:0.89, n:16, sc:0.70 },
+    ];
+    rows.forEach(row => {
+      const gap = 1 / (row.n + 1);
+      for(let i = 1; i <= row.n; i++){
+        CROWD.push({
+          x:     i * gap + (Math.random()-0.5) * gap * 0.4,
+          y:     row.y,
+          sc:    row.sc * (0.85 + Math.random()*0.30),
+          swayA: (Math.random()-0.5) * 0.0025,
+          swayF: 0.0004 + Math.random()*0.0004,
+          phase: Math.random()*Math.PI*2,
+          raised: Math.random() < 0.30,
+          raisedR: Math.random() < 0.5,   // which arm
+          headTilt: (Math.random()-0.5)*0.18,
+        });
+      }
     });
   }
 
-  const CANDLES=[{x:0.08,y:0.60},{x:0.14,y:0.62},{x:0.86,y:0.60},{x:0.92,y:0.62},{x:0.50,y:0.52}];
+  // ── Candles ──
+  const CANDLES = [
+    {x:0.05,y:0.58},{x:0.10,y:0.61},{x:0.16,y:0.59},
+    {x:0.84,y:0.59},{x:0.90,y:0.61},{x:0.95,y:0.58},
+    {x:0.48,y:0.50},{x:0.52,y:0.50},
+  ];
 
-  function resize(){W=canvas.width=canvas.offsetWidth;H=canvas.height=canvas.offsetHeight;buildCongregation();}
+  // ── Fireflies / blessing sparks that float up ──
+  const SPARKS = Array.from({length:18},()=>({
+    x: Math.random(), y: 0.6 + Math.random()*0.4,
+    r: 0.8 + Math.random()*1.5,
+    vy: -(0.00010 + Math.random()*0.00025),
+    vx: (Math.random()-0.5)*0.00006,
+    alpha: 0.5 + Math.random()*0.5,
+    phase: Math.random()*Math.PI*2,
+    color: Math.random()<0.6 ? [255,200,80] : [201,168,76]
+  }));
 
-  function drawBackground(){
-    const bg=ctx.createLinearGradient(0,0,0,H);
-    bg.addColorStop(0,'#04090f');bg.addColorStop(0.45,'#0a1824');bg.addColorStop(1,'#060d17');
-    ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+  function resize(){
+    W = canvas.width  = canvas.offsetWidth  || window.innerWidth;
+    H = canvas.height = canvas.offsetHeight || window.innerHeight;
+    buildCrowd();
   }
-  function drawArch(){
-    const cx=W*.5,top=H*.02,archW=W*.38,archH=H*.38;
-    ctx.save();ctx.strokeStyle='rgba(201,168,76,0.08)';ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.moveTo(cx-archW/2,H*.65);ctx.lineTo(cx-archW/2,top+archH*.5);
-    ctx.quadraticCurveTo(cx-archW/2,top,cx,top);ctx.quadraticCurveTo(cx+archW/2,top,cx+archW/2,top+archH*.5);
-    ctx.lineTo(cx+archW/2,H*.65);ctx.stroke();
-    const iW=archW*.6,iTop=top+H*.04;
-    ctx.beginPath();ctx.moveTo(cx-iW/2,H*.65);ctx.lineTo(cx-iW/2,iTop+archH*.5);
-    ctx.quadraticCurveTo(cx-iW/2,iTop,cx,iTop);ctx.quadraticCurveTo(cx+iW/2,iTop,cx+iW/2,iTop+archH*.5);
-    ctx.lineTo(cx+iW/2,H*.65);ctx.stroke();ctx.restore();
+
+  /* ── BG: deep sanctuary gradient ── */
+  function drawBG(){
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,   '#020609');
+    g.addColorStop(0.30,'#07111d');
+    g.addColorStop(0.65,'#0c1e30');
+    g.addColorStop(1,   '#040b14');
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
   }
+
+  /* ── Stained-glass window glow at the very top ── */
+  function drawWindows(){
+    const winData = [
+      {x:0.18,r:70,g:50,b:160},{x:0.35,r:200,g:60,b:60},
+      {x:0.50,r:201,g:168,b:76},{x:0.65,r:60,g:160,b:80},
+      {x:0.82,r:160,g:60,b:180}
+    ];
+    const pulse = 0.8 + 0.2*Math.sin(t*0.00035);
+    winData.forEach(w => {
+      const cx=w.x*W, cy=H*0.01, rad=W*0.10*pulse;
+      const g = ctx.createRadialGradient(cx,cy,0,cx,cy,rad);
+      g.addColorStop(0, `rgba(${w.r},${w.g},${w.b},0.28)`);
+      g.addColorStop(0.5,`rgba(${w.r},${w.g},${w.b},0.08)`);
+      g.addColorStop(1, `rgba(${w.r},${w.g},${w.b},0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(cx-rad, 0, rad*2, H*0.35);
+    });
+  }
+
+  /* ── Stained-glass tracery lines ── */
+  function drawTracery(){
+    ctx.save();
+    ctx.strokeStyle = 'rgba(201,168,76,0.12)';
+    ctx.lineWidth = 1;
+    const cx=W*0.5, top=H*0.01;
+    // Tall pointed arch (outer)
+    const aW=W*0.42, aH=H*0.50;
+    ctx.beginPath();
+    ctx.moveTo(cx-aW/2, H*0.68);
+    ctx.lineTo(cx-aW/2, top+aH*0.45);
+    ctx.bezierCurveTo(cx-aW/2,top, cx-aW*0.1,top*0.5, cx,top);
+    ctx.bezierCurveTo(cx+aW*0.1,top*0.5, cx+aW/2,top, cx+aW/2,top+aH*0.45);
+    ctx.lineTo(cx+aW/2, H*0.68);
+    ctx.stroke();
+    // Inner arch
+    const iW=aW*0.55;
+    ctx.beginPath();
+    ctx.moveTo(cx-iW/2, H*0.68);
+    ctx.lineTo(cx-iW/2, top+aH*0.52);
+    ctx.bezierCurveTo(cx-iW/2,top+H*0.04, cx,top+H*0.02, cx,top+H*0.04);
+    ctx.bezierCurveTo(cx,top+H*0.02, cx+iW/2,top+H*0.04, cx+iW/2,top+aH*0.52);
+    ctx.lineTo(cx+iW/2, H*0.68);
+    ctx.stroke();
+    // Rose window circle at top of arch
+    ctx.beginPath();
+    ctx.arc(cx, top+H*0.06, W*0.045, 0, Math.PI*2);
+    ctx.stroke();
+    // Rose window spokes
+    for(let i=0;i<8;i++){
+      const a=i*Math.PI/4;
+      ctx.beginPath();
+      ctx.moveTo(cx,top+H*0.06);
+      ctx.lineTo(cx+Math.cos(a)*W*0.045, top+H*0.06+Math.sin(a)*W*0.045);
+      ctx.stroke();
+    }
+    // Side columns
+    ctx.strokeStyle='rgba(201,168,76,0.07)';
+    [[0.06,0.30],[0.94,0.30]].forEach(([x,w])=>{
+      ctx.beginPath();
+      ctx.rect(x*W-w*W*0.5, H*0.15, w*W, H*0.55);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  /* ── Glowing cross on altar ── */
   function drawCross(){
-    const cx=W*.5,cy=H*.30,pulse=0.7+0.3*Math.sin(t*.0008);
-    ctx.save();ctx.shadowColor='rgba(201,168,76,0.6)';ctx.shadowBlur=24*pulse;
-    ctx.strokeStyle=`rgba(201,168,76,${0.28*pulse})`;ctx.lineWidth=3;ctx.lineCap='round';
-    const vH=H*.14,hW=W*.07;
-    ctx.beginPath();ctx.moveTo(cx,cy-vH/2);ctx.lineTo(cx,cy+vH/2);
-    ctx.moveTo(cx-hW/2,cy-vH*.15);ctx.lineTo(cx+hW/2,cy-vH*.15);ctx.stroke();ctx.restore();
+    const cx=W*0.5, cy=H*0.30;
+    const pulse = 0.6 + 0.4*Math.sin(t*0.00070);
+    const vH=H*0.16, hW=W*0.08, lw=Math.max(3,W*0.012);
+    ctx.save();
+    // Outer bloom
+    ctx.shadowColor = `rgba(255,210,100,${0.7*pulse})`;
+    ctx.shadowBlur = 36*pulse;
+    ctx.strokeStyle = `rgba(255,215,110,${0.55*pulse})`;
+    ctx.lineWidth = lw*1.8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx,cy-vH/2); ctx.lineTo(cx,cy+vH/2);
+    ctx.moveTo(cx-hW/2,cy-vH*0.18); ctx.lineTo(cx+hW/2,cy-vH*0.18);
+    ctx.stroke();
+    // Bright core
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = `rgba(255,235,160,${0.85*pulse})`;
+    ctx.lineWidth = lw*0.6;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy-vH/2); ctx.lineTo(cx,cy+vH/2);
+    ctx.moveTo(cx-hW/2,cy-vH*0.18); ctx.lineTo(cx+hW/2,cy-vH*0.18);
+    ctx.stroke();
+    ctx.restore();
   }
+
+  /* ── Light beams ── */
   function drawBeams(){
-    const pulse=0.85+0.15*Math.sin(t*.0005);
-    BEAMS.forEach(b=>{
-      const x0=b.x*W,halfW=b.width*W*.5,len=H*.95;
-      ctx.save();ctx.translate(x0,0);ctx.rotate(b.angle);
-      const grad=ctx.createLinearGradient(0,0,0,len);
-      const[r,g,bl]=b.color;
-      grad.addColorStop(0,`rgba(${r},${g},${bl},${b.alpha*pulse})`);
-      grad.addColorStop(0.6,`rgba(${r},${g},${bl},${b.alpha*.4*pulse})`);
-      grad.addColorStop(1,`rgba(${r},${g},${bl},0)`);
-      ctx.fillStyle=grad;ctx.beginPath();ctx.moveTo(-halfW*.1,0);ctx.lineTo(-halfW,len);ctx.lineTo(halfW,len);ctx.lineTo(halfW*.1,0);ctx.closePath();ctx.fill();ctx.restore();
+    const globalPulse = 0.88 + 0.12*Math.sin(t*0.00040);
+    BEAMS.forEach((b,bi)=>{
+      const x0=b.x*W, halfW=b.w*W*0.5, len=H*0.98;
+      const beamPulse = globalPulse * (0.90 + 0.10*Math.sin(t*0.00060+bi));
+      ctx.save();
+      ctx.translate(x0,0);
+      ctx.rotate(b.angle);
+      const g=ctx.createLinearGradient(0,0,0,len);
+      g.addColorStop(0,   `rgba(${b.r},${b.g},${b.b},${b.a*beamPulse})`);
+      g.addColorStop(0.45,`rgba(${b.r},${b.g},${b.b},${b.a*0.55*beamPulse})`);
+      g.addColorStop(0.80,`rgba(${b.r},${b.g},${b.b},${b.a*0.18*beamPulse})`);
+      g.addColorStop(1,   `rgba(${b.r},${b.g},${b.b},0)`);
+      ctx.fillStyle=g;
+      ctx.beginPath();
+      ctx.moveTo(-halfW*0.05, 0);
+      ctx.lineTo(-halfW, len);
+      ctx.lineTo(halfW, len);
+      ctx.lineTo(halfW*0.05, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     });
   }
-  function drawFloor(){
-    const grad=ctx.createRadialGradient(W*.5,H*.72,0,W*.5,H*.72,W*.45);
-    grad.addColorStop(0,'rgba(201,168,76,0.07)');grad.addColorStop(1,'rgba(201,168,76,0)');
-    ctx.fillStyle=grad;ctx.fillRect(0,H*.55,W,H*.45);
+
+  /* ── Altar glow on floor ── */
+  function drawFloorGlow(){
+    const pulse = 0.7 + 0.3*Math.sin(t*0.00055);
+    // Central altar glow
+    const g1=ctx.createRadialGradient(W*0.5,H*0.68,0,W*0.5,H*0.68,W*0.40);
+    g1.addColorStop(0,`rgba(201,168,76,${0.14*pulse})`);
+    g1.addColorStop(0.5,`rgba(201,168,76,${0.05*pulse})`);
+    g1.addColorStop(1,'rgba(201,168,76,0)');
+    ctx.fillStyle=g1; ctx.fillRect(0,H*0.50,W,H*0.50);
+    // Floor reflection
+    const g2=ctx.createLinearGradient(0,H*0.88,0,H);
+    g2.addColorStop(0,`rgba(201,140,50,${0.10*pulse})`);
+    g2.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g2; ctx.fillRect(0,H*0.88,W,H*0.12);
   }
+
+  /* ── Candle flames ── */
   function drawCandles(){
-    CANDLES.forEach(c=>{
-      const cx=c.x*W,cy=c.y*H,fl=0.75+0.25*Math.sin(t*.004+cx);
-      const glow=ctx.createRadialGradient(cx,cy,0,cx,cy,W*.07*fl);
-      glow.addColorStop(0,`rgba(255,200,80,${0.18*fl})`);glow.addColorStop(1,'rgba(255,180,40,0)');
-      ctx.fillStyle=glow;ctx.beginPath();ctx.arc(cx,cy,W*.07*fl,0,Math.PI*2);ctx.fill();
-      ctx.fillStyle=`rgba(255,220,100,${0.6*fl})`;ctx.beginPath();ctx.arc(cx,cy,2,0,Math.PI*2);ctx.fill();
+    CANDLES.forEach((c,ci)=>{
+      const cx=c.x*W, cy=c.y*H;
+      const flicker = 0.6+0.4*Math.sin(t*0.005+ci*1.7+Math.sin(t*0.013+ci));
+      const rad = W*0.055*flicker;
+      // Warm halo
+      const g=ctx.createRadialGradient(cx,cy,0,cx,cy,rad);
+      g.addColorStop(0,   `rgba(255,180,50,${0.50*flicker})`);
+      g.addColorStop(0.3, `rgba(255,140,20,${0.22*flicker})`);
+      g.addColorStop(0.7, `rgba(255,100,0,${0.07*flicker})`);
+      g.addColorStop(1,   'rgba(255,80,0,0)');
+      ctx.fillStyle=g;
+      ctx.beginPath(); ctx.arc(cx,cy,rad,0,Math.PI*2); ctx.fill();
+      // Candle body
+      ctx.fillStyle=`rgba(255,240,200,${0.85*flicker})`;
+      ctx.beginPath(); ctx.arc(cx,cy,Math.max(1.5,W*0.003),0,Math.PI*2); ctx.fill();
+      // Flame teardrop
+      ctx.save();
+      ctx.translate(cx, cy-W*0.004);
+      ctx.fillStyle=`rgba(255,220,100,${0.9*flicker})`;
+      ctx.beginPath();
+      ctx.moveTo(0,-W*0.009*flicker);
+      ctx.bezierCurveTo(W*0.003,-W*0.005, W*0.003,W*0.004, 0,W*0.004);
+      ctx.bezierCurveTo(-W*0.003,W*0.004,-W*0.003,-W*0.005, 0,-W*0.009*flicker);
+      ctx.fill();
+      ctx.restore();
     });
   }
+
+  /* ── Draw one congregation figure ── */
   function drawFigure(fig){
-    const x=fig.x*W,baseY=fig.y*H,sc=fig.scale*Math.min(W,H)*.028;
-    const sway=Math.sin(t*.0006+fig.swayPhase)*fig.sway*W;
-    ctx.save();ctx.translate(x+sway,baseY);
-    const alpha=0.18+(1-fig.y)*.4;ctx.fillStyle=`rgba(10,20,35,${alpha})`;
-    ctx.beginPath();ctx.ellipse(0,0,sc*.9,sc*1.4,0,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(0,-sc*1.7,sc*.65,0,Math.PI*2);ctx.fill();
+    const px = fig.x*W;
+    const py = fig.y*H;
+    const sz = fig.sc * Math.min(W,H) * 0.032;
+    const sway = Math.sin(t*fig.swayF + fig.phase)*fig.swayA*W;
+    // depth: further back = darker and smaller
+    const depthAlpha = 0.25 + (fig.y-0.70)*1.20;
+
+    ctx.save();
+    ctx.translate(px+sway, py);
+
+    // Body fill — silhouette
+    const bodyFill = `rgba(5,12,22,${Math.min(0.95,depthAlpha)})`;
+
+    // Torso
+    ctx.fillStyle = bodyFill;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, sz*0.55, sz*1.10, fig.headTilt*0.3, 0, Math.PI*2);
+    ctx.fill();
+
+    // Head
+    ctx.beginPath();
+    ctx.save();
+    ctx.rotate(fig.headTilt);
+    ctx.ellipse(0,-sz*1.55, sz*0.42, sz*0.48, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // Shoulders width
+    ctx.beginPath();
+    ctx.ellipse(0,-sz*0.35, sz*0.72, sz*0.28, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Raised arm in worship
     if(fig.raised){
-      const arm=Math.sin(t*.0007+fig.swayPhase)*.15;
-      ctx.save();ctx.strokeStyle=`rgba(10,20,35,${alpha})`;ctx.lineWidth=sc*.4;ctx.lineCap='round';
-      ctx.beginPath();ctx.moveTo(sc*.5,-sc*.8);ctx.quadraticCurveTo(sc*1.2+arm*sc,-sc*2.5,sc*.9,-sc*3.2);ctx.stroke();ctx.restore();
+      const armSway = Math.sin(t*0.00065+fig.phase)*0.12;
+      ctx.save();
+      ctx.strokeStyle = bodyFill;
+      ctx.lineWidth = sz*0.28;
+      ctx.lineCap = 'round';
+      const side = fig.raisedR ? 1 : -1;
+      ctx.beginPath();
+      ctx.moveTo(side*sz*0.55, -sz*0.55);
+      ctx.quadraticCurveTo(
+        side*(sz*1.10+armSway*sz), -sz*2.0,
+        side*sz*0.75, -sz*2.8
+      );
+      ctx.stroke();
+      // Hand dot
+      ctx.fillStyle = bodyFill;
+      ctx.beginPath();
+      ctx.arc(side*sz*0.75, -sz*2.8, sz*0.18, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
     }
     ctx.restore();
   }
+
+  /* ── Dust motes in beams ── */
   function drawMotes(){
     MOTES.forEach(m=>{
-      const tw=0.5+0.5*Math.sin(t*.001+m.phase);
-      ctx.beginPath();ctx.arc(m.x*W,m.y*H,m.r,0,Math.PI*2);
-      ctx.fillStyle=`rgba(245,240,220,${m.alpha*tw})`;ctx.fill();
-      m.y-=m.speed;m.x+=m.drift;
+      const tw = 0.4+0.6*Math.sin(t*m.twinkleSpeed+m.phase);
+      const grd = ctx.createRadialGradient(m.x*W,m.y*H,0,m.x*W,m.y*H,m.r*2);
+      grd.addColorStop(0,`rgba(245,235,200,${m.alpha*tw})`);
+      grd.addColorStop(1,'rgba(245,235,200,0)');
+      ctx.fillStyle=grd;
+      ctx.beginPath(); ctx.arc(m.x*W,m.y*H,m.r*2,0,Math.PI*2); ctx.fill();
+      m.y+=m.vy; m.x+=m.vx;
       if(m.y<-0.02){m.y=1.02;m.x=Math.random();}
-      if(m.x<0||m.x>1)m.drift*=-1;
+      if(m.x<0||m.x>1) m.vx*=-1;
     });
   }
-  function drawVignette(){
-    const vg=ctx.createRadialGradient(W/2,H/2,H*.25,W/2,H/2,H*.85);
-    vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,0.65)');
-    ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+
+  /* ── Golden sparks floating up like a worship moment ── */
+  function drawSparks(){
+    SPARKS.forEach(sp=>{
+      const glow=0.5+0.5*Math.sin(t*0.003+sp.phase);
+      const [r,g,b]=sp.color;
+      const gr=ctx.createRadialGradient(sp.x*W,sp.y*H,0,sp.x*W,sp.y*H,sp.r*3);
+      gr.addColorStop(0,`rgba(${r},${g},${b},${sp.alpha*glow})`);
+      gr.addColorStop(1,`rgba(${r},${g},${b},0)`);
+      ctx.fillStyle=gr;
+      ctx.beginPath(); ctx.arc(sp.x*W,sp.y*H,sp.r*3,0,Math.PI*2); ctx.fill();
+      sp.y+=sp.vy; sp.x+=sp.vx;
+      sp.alpha = Math.max(0, sp.alpha-0.00008);
+      if(sp.y<0.30 || sp.alpha<0.05){
+        sp.y=0.62+Math.random()*0.38;
+        sp.x=Math.random();
+        sp.alpha=0.5+Math.random()*0.5;
+      }
+    });
   }
+
+  /* ── Vignette ── */
+  function drawVignette(){
+    const v=ctx.createRadialGradient(W/2,H*0.45,H*0.15,W/2,H*0.45,H*0.85);
+    v.addColorStop(0,'rgba(0,0,0,0)');
+    v.addColorStop(0.6,'rgba(0,0,0,0.20)');
+    v.addColorStop(1,'rgba(0,0,0,0.78)');
+    ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
+    // Extra dark bottom strip so buttons are readable
+    const vb=ctx.createLinearGradient(0,H*0.75,0,H);
+    vb.addColorStop(0,'rgba(0,0,0,0)');
+    vb.addColorStop(1,'rgba(0,0,0,0.60)');
+    ctx.fillStyle=vb; ctx.fillRect(0,H*0.75,W,H*0.25);
+  }
+
   function frame(now){
-    t=now;ctx.clearRect(0,0,W,H);
-    drawBackground();drawBeams();drawArch();drawCross();drawFloor();drawCandles();
-    CONGREGATION.sort((a,b)=>a.y-b.y).forEach(drawFigure);
-    drawMotes();drawVignette();
+    t=now;
+    ctx.clearRect(0,0,W,H);
+    drawBG();
+    drawWindows();
+    drawBeams();
+    drawTracery();
+    drawCross();
+    drawFloorGlow();
+    drawCandles();
+    [...CROWD].sort((a,b)=>a.y-b.y).forEach(drawFigure);
+    drawMotes();
+    drawSparks();
+    drawVignette();
     raf=requestAnimationFrame(frame);
   }
-  function start(){resize();raf=requestAnimationFrame(frame);}
-  function stop(){cancelAnimationFrame(raf);}
-  window.addEventListener('resize',resize);
-  const obs=new MutationObserver(()=>{
-    const s=document.getElementById('splash');
-    if(s&&s.classList.contains('active'))start();else stop();
+
+  function start(){
+    if(running) return;
+    running=true;
+    resize();
+    raf=requestAnimationFrame(frame);
+  }
+  function stop(){
+    running=false;
+    if(raf){ cancelAnimationFrame(raf); raf=null; }
+  }
+
+  window.addEventListener('resize', resize);
+
+  // Watch for splash becoming active
+  const obs = new MutationObserver(()=>{
+    const splash=document.getElementById('splash');
+    if(splash && splash.classList.contains('active')) start();
+    else stop();
   });
   obs.observe(document.getElementById('splash'),{attributes:true,attributeFilter:['class']});
-  // Don't auto-start — Firebase auth observer controls first screen
+
+  // KEY FIX: also start immediately if splash is already the active screen
+  // (Firebase auth observer may show splash after load, not before)
+  const checkStart = setInterval(()=>{
+    const splash=document.getElementById('splash');
+    if(splash && splash.classList.contains('active')){ start(); clearInterval(checkStart); }
+    // Also check if auth decided to skip splash (logged-in user)
+    if(document.getElementById('dashboard') && document.getElementById('dashboard').classList.contains('active')){
+      clearInterval(checkStart);
+    }
+  }, 100);
 })();
 </script>
 </body>
