@@ -1,0 +1,1832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SermonVault</title>
+  <meta name="description" content="Capture, structure and revisit every sermon — by voice."/>
+  <meta name="theme-color" content="#0D1B2A"/>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icons/icon-192.png"/>
+  <style>
+    :root {
+      --navy:#08131E; --navy-mid:#0F1F30; --navy-light:#172B3E;
+      --gold:#D4A843; --gold-light:#EBC46A; --gold-dim:rgba(212,168,67,0.18);
+      --cream:#F7F2EA; --cream-dim:rgba(247,242,234,0.65);
+      --purple:#7B5FA0; --purple-light:#9B7FC0;
+      --error:#E05C5C; --success:#4CAF7D;
+      --card-bg:#0F1F30; --radius:18px; --radius-sm:11px;
+      --border-subtle: rgba(212,168,67,0.12);
+      --glow-gold: 0 0 24px rgba(212,168,67,0.25);
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:system-ui,-apple-system,sans-serif;background:var(--navy);color:var(--cream);min-height:100vh;overflow-x:hidden;}
+
+    /* SCREENS */
+    .screen{display:none;min-height:100vh;}
+    .screen.active{display:flex;flex-direction:column;}
+
+    /* SPLASH */
+    #splash{align-items:center;justify-content:center;text-align:center;padding:40px 24px;position:relative;overflow:hidden;background:#060e18;}
+    #church-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;}
+    .splash-content{position:relative;z-index:2;width:100%;}
+    .splash-icon{width:80px;height:80px;background:rgba(201,168,76,0.18);border:2px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-size:36px;box-shadow:0 0 32px rgba(201,168,76,0.25);}
+    .splash-title{font-family:Georgia,serif;font-size:36px;font-weight:700;color:var(--cream);letter-spacing:-0.5px;text-shadow:0 2px 20px rgba(0,0,0,0.6);}
+    .splash-title span{color:var(--gold);}
+    .splash-sub{font-size:15px;color:var(--cream-dim);margin:10px 0 48px;line-height:1.5;text-shadow:0 1px 8px rgba(0,0,0,0.8);}
+
+    /* BUTTONS */
+    .btn-primary{width:100%;padding:16px;background:var(--gold);color:var(--navy);font-size:16px;font-weight:700;border:none;border-radius:var(--radius);cursor:pointer;transition:background .2s,transform .1s;}
+    .btn-primary:active{transform:scale(0.98);}
+    .btn-primary:hover{background:var(--gold-light);}
+    .btn-secondary{width:100%;padding:15px;background:transparent;color:var(--cream);font-size:16px;font-weight:600;border:1.5px solid rgba(245,240,232,0.25);border-radius:var(--radius);cursor:pointer;margin-top:12px;transition:border-color .2s;}
+    .btn-secondary:hover{border-color:var(--gold);color:var(--gold);}
+    .btn-ghost{background:none;border:none;color:var(--cream-dim);font-size:14px;cursor:pointer;text-decoration:underline;}
+
+    /* AUTH */
+    #signup,#login{padding:0;background:var(--navy);}
+    .auth-header{padding:56px 24px 32px;background:linear-gradient(180deg,#0e1f30 0%,#08131e 100%);text-align:center;border-bottom:1px solid var(--border-subtle);}
+    .auth-header h2{font-family:Georgia,serif;font-size:26px;color:var(--cream);margin-bottom:6px;}
+    .auth-header p{font-size:14px;color:var(--cream-dim);}
+    .auth-body{padding:32px 24px;flex:1;}
+    .field{margin-bottom:20px;}
+    .field label{display:block;font-size:13px;color:var(--cream-dim);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
+    .field input{width:100%;padding:14px 16px;background:var(--card-bg);border:1.5px solid rgba(245,240,232,0.1);border-radius:var(--radius-sm);color:var(--cream);font-size:16px;outline:none;transition:border-color .2s;}
+    .field input:focus{border-color:var(--gold);}
+    .field input::placeholder{color:rgba(245,240,232,0.3);}
+    .auth-footer{text-align:center;margin-top:24px;}
+    .auth-footer span{font-size:14px;color:var(--cream-dim);}
+    .auth-footer button{background:none;border:none;color:var(--gold);font-size:14px;font-weight:600;cursor:pointer;}
+    .error-msg{background:rgba(224,92,92,0.15);border:1px solid var(--error);color:var(--error);padding:12px 16px;border-radius:var(--radius-sm);font-size:14px;margin-bottom:20px;display:none;}
+    .error-msg.show{display:block;}
+
+    /* DASHBOARD */
+    #dashboard{background:var(--navy);}
+    .top-bar{display:flex;align-items:center;justify-content:space-between;padding:52px 24px 20px;background:linear-gradient(180deg,#0a1828 0%,var(--navy-mid) 100%);border-bottom:1px solid var(--border-subtle);}
+    .top-bar-left h1{font-family:Georgia,serif;font-size:24px;color:var(--cream);letter-spacing:-0.3px;}
+    .top-bar-left p{font-size:13px;color:var(--cream-dim);margin-top:3px;}
+    .avatar-btn{width:40px;height:40px;background:var(--gold-dim);border:1.5px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;font-family:Georgia,serif;color:var(--gold);font-weight:700;}
+    .dash-body{flex:1;padding:0 24px 100px;overflow-y:auto;}
+    .section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--cream-dim);margin:28px 0 14px;}
+
+    /* RECAP BANNER on dashboard */
+    .recap-banner{background:linear-gradient(135deg,#1a2f45,#1e2f48);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:18px;margin-bottom:8px;cursor:pointer;transition:border-color .2s;}
+    .recap-banner:hover{border-color:var(--gold);}
+    .recap-banner-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:8px;}
+    .recap-banner h3{font-family:Georgia,serif;font-size:16px;color:var(--cream);line-height:1.3;margin-bottom:4px;}
+    .recap-banner p{font-size:13px;color:var(--cream-dim);}
+    .recap-prompt{background:rgba(107,79,142,0.12);border:1px solid rgba(107,79,142,0.25);border-radius:var(--radius-sm);padding:12px 14px;margin-top:10px;font-size:13px;color:var(--purple-light);font-style:italic;}
+
+    /* EMPTY + CARDS */
+    .empty-state{text-align:center;padding:48px 24px;color:var(--cream-dim);}
+    .empty-state .empty-icon{font-size:48px;margin-bottom:16px;}
+    .empty-state p{font-size:15px;line-height:1.6;}
+    .sermon-card{background:linear-gradient(135deg,var(--card-bg) 0%,#0d1e2e 100%);border-radius:var(--radius);padding:20px;margin-bottom:14px;border:1px solid var(--border-subtle);cursor:pointer;transition:border-color .25s,transform .18s,box-shadow .25s;position:relative;}
+    .sermon-card:hover{border-color:var(--gold);transform:translateY(-2px);box-shadow:var(--glow-gold);}
+    .sermon-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gold);border-radius:var(--radius) 0 0 var(--radius);opacity:0;transition:opacity .25s;}
+    .sermon-card:hover::before{opacity:1;}
+    .sermon-card-top{display:flex;align-items:flex-start;justify-content:space-between;}
+    .sermon-card h3{font-family:Georgia,serif;font-size:17px;color:var(--cream);line-height:1.3;flex:1;margin-right:12px;}
+    .sermon-date{font-size:11px;color:var(--gold);font-weight:600;white-space:nowrap;}
+    .sermon-meta{font-size:13px;color:var(--cream-dim);margin-top:6px;}
+    .sermon-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;}
+    .tag{background:var(--gold-dim);color:var(--gold);font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid rgba(201,168,76,0.3);}
+    .tag.purple{background:rgba(107,79,142,0.2);color:var(--purple-light);border-color:rgba(107,79,142,0.3);}
+
+    /* FAB */
+    .fab{position:fixed;bottom:88px;right:24px;width:60px;height:60px;background:var(--gold);border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 6px 24px rgba(201,168,76,0.4);cursor:pointer;transition:transform .2s,box-shadow .2s;z-index:50;}
+    .fab:hover{transform:scale(1.08);box-shadow:0 8px 32px rgba(201,168,76,0.5);}
+
+    /* BOTTOM NAV */
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,19,30,0.97);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--border-subtle);display:flex;padding:0 0 env(safe-area-inset-bottom);z-index:40;}
+    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:12px 0;cursor:pointer;border:none;background:none;color:var(--cream-dim);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;transition:color .2s;gap:4px;}
+    .nav-item .nav-icon{font-size:20px;}
+    .nav-item.active{color:var(--gold);}
+
+    /* NEW SERMON */
+    #new-sermon{background:var(--navy);}
+    .page-header{display:flex;align-items:center;gap:16px;padding:52px 24px 20px;background:var(--navy-mid);}
+    .back-btn{width:38px;height:38px;background:var(--gold-dim);border:1.5px solid rgba(201,168,76,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;flex-shrink:0;}
+    .page-header h2{font-family:Georgia,serif;font-size:20px;}
+    .new-sermon-body{padding:24px;flex:1;overflow-y:auto;padding-bottom:160px;}
+
+    /* AUDIO RECORDER UI */
+    .audio-bar{display:none;background:var(--card-bg);border:1px solid rgba(245,240,232,0.08);border-radius:var(--radius-sm);padding:12px 16px;margin-top:12px;align-items:center;gap:12px;}
+    .audio-bar.show{display:flex;}
+    .audio-play-btn{width:36px;height:36px;background:var(--gold);border:none;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .audio-label{font-size:13px;color:var(--cream-dim);flex:1;}
+    .audio-del{background:none;border:none;color:var(--error);font-size:18px;cursor:pointer;}
+
+    /* MIC */
+    .mic-zone{text-align:center;padding:36px 0;}
+    .mic-wrap{position:relative;display:inline-block;margin-bottom:20px;}
+    .mic-ripple{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:100px;height:100px;border-radius:50%;background:rgba(201,168,76,0.2);animation:none;}
+    .mic-ripple.pulsing{animation:ripple 1.4s ease-out infinite;}
+    @keyframes ripple{0%{width:96px;height:96px;opacity:.8}100%{width:180px;height:180px;opacity:0}}
+    .mic-btn{position:relative;width:100px;height:100px;border-radius:50%;background:radial-gradient(circle at 35% 35%,var(--gold-light),var(--gold));border:none;font-size:42px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(212,168,67,0.45),0 2px 8px rgba(0,0,0,0.4);transition:background .3s,box-shadow .3s;z-index:1;}
+    .mic-btn.recording{background:var(--error);box-shadow:0 0 0 8px rgba(224,92,92,0.2);animation:micPulse 1.2s ease-in-out infinite;}
+    @keyframes micPulse{0%,100%{box-shadow:0 0 0 8px rgba(224,92,92,0.2)}50%{box-shadow:0 0 0 16px rgba(224,92,92,0.08)}}
+    .mic-status{font-size:15px;color:var(--cream-dim);margin-top:8px;}
+    .mic-status.recording{color:var(--error);font-weight:600;}
+    .rec-time{font-size:13px;color:var(--cream-dim);margin-top:4px;font-variant-numeric:tabular-nums;}
+    .transcript-box{background:rgba(8,19,30,0.8);border:1.5px solid rgba(212,168,67,0.2);border-radius:var(--radius);padding:18px;font-size:15px;color:var(--cream);line-height:1.8;min-height:80px;max-height:220px;overflow-y:auto;display:none;}
+    .transcript-box.show{display:block;}
+    .process-btn{width:100%;padding:18px;background:linear-gradient(135deg,var(--purple),#5a3d7a);color:var(--cream);font-size:17px;font-weight:700;border:none;border-radius:var(--radius);cursor:pointer;margin-top:24px;display:none;transition:all .2s;box-shadow:0 6px 24px rgba(107,79,142,0.5);letter-spacing:0.3px;}
+    .process-btn.show{display:block;}
+    .process-btn:hover{background:linear-gradient(135deg,var(--purple-light),var(--purple));transform:translateY(-1px);}
+    .process-btn:active{transform:translateY(0);}
+    .process-btn:disabled{opacity:.6;cursor:not-allowed;transform:none;}
+    .spinner{width:20px;height:20px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin .8s linear infinite;display:inline-block;vertical-align:middle;margin-right:8px;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* SERMON DETAIL */
+    #sermon-detail{background:var(--navy);}
+    .detail-header{padding:52px 24px 28px;background:var(--navy-mid);}
+    .detail-header h2{font-family:Georgia,serif;font-size:22px;color:var(--cream);margin-top:16px;line-height:1.3;}
+    .detail-meta{font-size:13px;color:var(--cream-dim);margin-top:6px;}
+    .detail-actions{display:flex;gap:10px;margin-top:16px;}
+    .detail-action-btn{flex:1;padding:10px;background:var(--gold-dim);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius-sm);color:var(--gold);font-size:13px;font-weight:600;cursor:pointer;text-align:center;}
+    .detail-body{padding:24px;flex:1;overflow-y:auto;padding-bottom:100px;}
+    .detail-section{background:linear-gradient(135deg,var(--card-bg) 0%,#0a1826 100%);border-radius:var(--radius);padding:22px;margin-bottom:16px;border:1px solid var(--border-subtle);}
+    .detail-section h3{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:14px;}
+    .key-point{display:flex;gap:10px;margin-bottom:12px;align-items:flex-start;}
+    .point-dot{width:8px;height:8px;border-radius:50%;background:var(--gold);margin-top:6px;flex-shrink:0;}
+    .key-point p{font-size:15px;line-height:1.6;color:var(--cream);}
+    .scripture-item{background:rgba(107,79,142,0.15);border:1px solid rgba(107,79,142,0.3);border-radius:var(--radius-sm);padding:14px;margin-bottom:10px;}
+    .scripture-ref{font-family:Georgia,serif;font-size:14px;font-weight:700;color:var(--purple-light);margin-bottom:6px;cursor:pointer;display:flex;align-items:center;gap:6px;}
+    .scripture-ref .expand-icon{font-size:12px;transition:transform .2s;margin-left:auto;}
+    .scripture-ref.open .expand-icon{transform:rotate(180deg);}
+    .scripture-text{font-size:14px;color:var(--cream-dim);line-height:1.7;font-style:italic;display:none;padding-top:8px;border-top:1px solid rgba(107,79,142,0.2);margin-top:8px;}
+    .scripture-text.show{display:block;}
+    .loading-verse{font-size:13px;color:var(--cream-dim);font-style:italic;}
+    .action-step{background:rgba(76,175,125,0.1);border:1px solid rgba(76,175,125,0.3);border-radius:var(--radius-sm);padding:14px;font-size:15px;line-height:1.6;color:var(--cream);}
+    .action-step::before{content:"✅ ";}
+
+    /* SHARE CARD MODAL */
+    .modal-overlay{position:fixed;inset:0;background:rgba(13,27,42,0.9);display:none;align-items:flex-end;z-index:300;}
+    .modal-overlay.show{display:flex;}
+    .modal{background:var(--navy-mid);border-radius:var(--radius) var(--radius) 0 0;padding:24px;width:100%;max-height:90vh;overflow-y:auto;border-top:1px solid rgba(245,240,232,0.1);}
+    .modal-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+    .modal-top h3{font-family:Georgia,serif;font-size:18px;}
+    .modal-close{background:none;border:none;color:var(--cream-dim);font-size:22px;cursor:pointer;}
+
+    /* Share card canvas preview */
+    #share-canvas{width:100%;border-radius:var(--radius-sm);display:block;margin-bottom:16px;}
+    .share-quote-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;}
+    .share-quote-opt{background:var(--card-bg);border:1.5px solid rgba(245,240,232,0.08);border-radius:var(--radius-sm);padding:12px 14px;cursor:pointer;font-size:14px;color:var(--cream);line-height:1.5;transition:border-color .2s;}
+    .share-quote-opt.selected{border-color:var(--gold);}
+    .share-quote-opt:hover{border-color:var(--gold-light);}
+
+    /* RECAP SCREEN */
+    #recap-screen{background:var(--navy);}
+    .recap-body{padding:24px;flex:1;overflow-y:auto;padding-bottom:100px;}
+    .recap-sermon-title{font-family:Georgia,serif;font-size:24px;color:var(--cream);margin-bottom:6px;line-height:1.3;}
+    .recap-sermon-meta{font-size:13px;color:var(--cream-dim);margin-bottom:24px;}
+    .reflection-card{background:var(--card-bg);border:1px solid rgba(107,79,142,0.3);border-radius:var(--radius);padding:20px;margin-bottom:16px;}
+    .reflection-card h3{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--purple-light);margin-bottom:10px;}
+    .reflection-card p{font-size:15px;line-height:1.7;color:var(--cream);font-style:italic;}
+    .reflection-input{width:100%;background:var(--card-bg);border:1.5px solid rgba(245,240,232,0.1);border-radius:var(--radius-sm);padding:14px;color:var(--cream);font-size:15px;line-height:1.6;min-height:100px;resize:none;outline:none;font-family:inherit;margin-top:10px;}
+    .reflection-input:focus{border-color:var(--purple-light);}
+    .reflection-input::placeholder{color:rgba(245,240,232,0.3);}
+    .next-sermon-btn{width:100%;padding:16px;background:var(--navy-light);border:1.5px solid rgba(245,240,232,0.12);color:var(--cream);font-size:15px;font-weight:600;border-radius:var(--radius);cursor:pointer;margin-top:8px;}
+
+    /* LIBRARY */
+    #library{background:var(--navy);}
+    .library-body{padding:20px 24px 100px;flex:1;overflow-y:auto;}
+    .search-bar{display:flex;align-items:center;gap:10px;background:var(--card-bg);border:1.5px solid rgba(245,240,232,0.1);border-radius:var(--radius);padding:12px 16px;margin-bottom:20px;}
+    .search-bar input{flex:1;background:none;border:none;color:var(--cream);font-size:15px;outline:none;}
+    .search-bar input::placeholder{color:rgba(245,240,232,0.35);}
+
+    /* PROFILE */
+    #profile-screen{background:var(--navy);}
+    .profile-body{padding:24px;flex:1;overflow-y:auto;padding-bottom:100px;}
+    .profile-avatar{width:72px;height:72px;background:var(--gold-dim);border:2px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:Georgia,serif;font-size:30px;color:var(--gold);font-weight:700;margin:0 auto 16px;}
+    .profile-name{text-align:center;font-family:Georgia,serif;font-size:20px;color:var(--cream);}
+    .profile-email{text-align:center;font-size:14px;color:var(--cream-dim);margin-top:4px;margin-bottom:32px;}
+    .settings-group{margin-bottom:28px;}
+    .settings-group h3{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--cream-dim);margin-bottom:12px;}
+    .settings-row{display:flex;align-items:center;justify-content:space-between;background:var(--card-bg);border-radius:var(--radius-sm);padding:16px;margin-bottom:8px;border:1px solid rgba(245,240,232,0.06);}
+    .settings-row-left{display:flex;align-items:center;gap:12px;}
+    .settings-row-icon{font-size:20px;width:28px;text-align:center;}
+    .settings-row-label{font-size:15px;color:var(--cream);}
+    .settings-row-sub{font-size:12px;color:var(--cream-dim);}
+    .toggle{width:44px;height:24px;background:rgba(245,240,232,0.15);border-radius:12px;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0;}
+    .toggle.on{background:var(--gold);}
+    .toggle::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;background:white;border-radius:50%;transition:transform .2s;}
+    .toggle.on::after{transform:translateX(20px);}
+    .signout-btn{width:100%;padding:15px;background:rgba(224,92,92,0.1);border:1.5px solid rgba(224,92,92,0.3);color:var(--error);border-radius:var(--radius);font-size:16px;font-weight:600;cursor:pointer;margin-top:8px;}
+
+    /* TOAST */
+    .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--navy-light);border:1px solid rgba(245,240,232,0.15);color:var(--cream);padding:12px 20px;border-radius:30px;font-size:14px;font-weight:600;opacity:0;transition:opacity .3s,transform .3s;z-index:200;white-space:nowrap;pointer-events:none;}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+    /* INSTALL BANNER */
+    .install-banner{position:fixed;bottom:80px;left:16px;right:16px;background:var(--navy-light);border:1.5px solid var(--gold);border-radius:var(--radius);padding:16px;display:none;align-items:center;gap:12px;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,0.4);}
+    .install-banner.show{display:flex;}
+    .install-banner p{flex:1;font-size:14px;line-height:1.4;}
+    .install-banner p span{color:var(--gold);font-weight:700;}
+    .install-banner-btns{display:flex;gap:8px;}
+    .btn-install{padding:8px 16px;background:var(--gold);color:var(--navy);border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;}
+    .btn-dismiss{padding:8px 12px;background:none;color:var(--cream-dim);border:none;font-size:13px;cursor:pointer;}
+
+    /* LOADING SCREEN */
+    #loading-screen{position:fixed;inset:0;background:var(--navy);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;z-index:999;}
+    #loading-screen.hide{display:none;}
+    .loading-logo{font-family:Georgia,serif;font-size:28px;color:var(--gold);}
+    .loading-dots{display:flex;gap:6px;}
+    .loading-dot{width:8px;height:8px;background:var(--gold);border-radius:50%;animation:dotPulse 1.2s ease-in-out infinite;}
+    .loading-dot:nth-child(2){animation-delay:.2s;}
+    .loading-dot:nth-child(3){animation-delay:.4s;}
+    @keyframes dotPulse{0%,80%,100%{transform:scale(0.6);opacity:.4}40%{transform:scale(1);opacity:1}}
+
+    /* APP ICON SVG inline */
+    .sv-icon{display:block;}
+  </style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading-screen">
+  <div class="loading-logo">SermonVault</div>
+  <div class="loading-dots">
+    <div class="loading-dot"></div>
+    <div class="loading-dot"></div>
+    <div class="loading-dot"></div>
+  </div>
+</div>
+
+<!-- SPLASH -->
+<div id="splash" class="screen">
+  <canvas id="church-canvas"></canvas>
+  <div class="splash-content">
+    <div class="splash-icon">🎙️</div>
+    <h1 class="splash-title">Sermon<span>Vault</span></h1>
+    <p class="splash-sub">Capture every sermon by voice.<br>Let AI turn your words into lasting notes.</p>
+    <button class="btn-primary" onclick="showScreen('signup')">Get Started</button>
+    <button class="btn-secondary" onclick="showScreen('login')">I already have an account</button>
+  </div>
+</div>
+
+<!-- SIGN UP -->
+<div id="signup" class="screen">
+  <div class="auth-header">
+    <button class="btn-ghost" onclick="showScreen('splash')" style="margin-bottom:12px;">← Back</button>
+    <h2>Create your account</h2>
+    <p>Your sermon library starts here</p>
+  </div>
+  <div class="auth-body">
+    <div class="error-msg" id="signup-error"></div>
+    <div class="field"><label>Full Name</label><input type="text" id="signup-name" placeholder="Your name" autocomplete="name"/></div>
+    <div class="field"><label>Church (optional)</label><input type="text" id="signup-church" placeholder="Your church name"/></div>
+    <div class="field"><label>Email</label><input type="email" id="signup-email" placeholder="you@example.com" autocomplete="email"/></div>
+    <div class="field"><label>Password</label><input type="password" id="signup-password" placeholder="At least 6 characters" autocomplete="new-password"/></div>
+    <button class="btn-primary" id="signup-btn" onclick="handleSignup()">Create Account</button>
+    <div class="auth-footer"><span>Already have an account? </span><button onclick="showScreen('login')">Sign in</button></div>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="login" class="screen">
+  <div class="auth-header">
+    <button class="btn-ghost" onclick="showScreen('splash')" style="margin-bottom:12px;">← Back</button>
+    <h2>Welcome back</h2>
+    <p>Sign in to your sermon library</p>
+  </div>
+  <div class="auth-body">
+    <div class="error-msg" id="login-error"></div>
+    <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com" autocomplete="email"/></div>
+    <div class="field"><label>Password</label><input type="password" id="login-password" placeholder="Your password" autocomplete="current-password"/></div>
+    <button class="btn-primary" id="login-btn" onclick="handleLogin()">Sign In</button>
+    <div class="auth-footer"><span>Don't have an account? </span><button onclick="showScreen('signup')">Sign up</button></div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="screen">
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <h1>SermonVault</h1>
+      <p id="dash-greeting">Good morning</p>
+    </div>
+    <div class="avatar-btn" id="dash-avatar" onclick="switchTab('profile-screen',document.querySelectorAll('.nav-item')[2])">E</div>
+  </div>
+  <div class="dash-body">
+    <div id="recap-section"></div>
+    <div class="section-label">Recent Sermons</div>
+    <div id="recent-sermons">
+      <div class="empty-state"><div class="empty-icon">🎙️</div><p>No sermons yet.<br>Tap the mic to record your first one.</p></div>
+    </div>
+  </div>
+  <button class="fab" onclick="showScreen('new-sermon')">🎙</button>
+  <nav class="bottom-nav">
+    <button class="nav-item active" onclick="switchTab('dashboard',this)"><span class="nav-icon">🏠</span>Home</button>
+    <button class="nav-item" onclick="switchTab('library',this)"><span class="nav-icon">📚</span>Library</button>
+    <button class="nav-item" onclick="switchTab('profile-screen',this)"><span class="nav-icon">👤</span>Profile</button>
+  </nav>
+</div>
+
+<!-- NEW SERMON -->
+<div id="new-sermon" class="screen">
+  <div class="page-header">
+    <div class="back-btn" onclick="showScreen('dashboard')">←</div>
+    <h2>New Sermon</h2>
+  </div>
+  <div class="new-sermon-body">
+    <div class="field"><label>Preacher</label><input type="text" id="preacher-name" placeholder="Pastor's name"/></div>
+    <div class="field"><label>Sermon Title (optional)</label><input type="text" id="sermon-title-input" placeholder="AI will infer if left blank"/></div>
+    <div class="mic-zone">
+      <div class="mic-wrap">
+        <div class="mic-ripple" id="mic-ripple"></div>
+        <button class="mic-btn" id="mic-btn" onclick="toggleRecording()">🎙️</button>
+      </div>
+      <p class="mic-status" id="mic-status">Tap to start recording</p>
+      <p class="rec-time" id="rec-time"></p>
+    </div>
+    <div class="audio-bar" id="audio-bar">
+      <button class="audio-play-btn" id="audio-play-btn" onclick="toggleAudioPlayback()">▶</button>
+      <span class="audio-label" id="audio-label">Recorded audio</span>
+      <button class="audio-del" onclick="deleteAudio()" title="Remove audio">✕</button>
+    </div>
+    <div class="section-label" id="transcript-label" style="display:none;">Transcript</div>
+    <div class="transcript-box" id="transcript-box"></div>
+    <button class="process-btn" id="process-btn" onclick="processSermon()">✨ Structure with AI</button>
+  </div>
+</div>
+
+<!-- SERMON DETAIL -->
+<div id="sermon-detail" class="screen">
+  <div class="detail-header">
+    <button class="back-btn" onclick="goBackFromDetail()">←</button>
+    <h2 id="detail-title">Sermon Title</h2>
+    <p class="detail-meta" id="detail-meta"></p>
+    <div class="detail-actions">
+      <button class="detail-action-btn" onclick="openShareModal()">🖼 Share Card</button>
+      <button class="detail-action-btn" onclick="openRecapFromDetail()">🔁 Recap</button>
+    </div>
+  </div>
+  <div class="detail-body" id="detail-body"></div>
+</div>
+
+<!-- RECAP SCREEN -->
+<div id="recap-screen" class="screen">
+  <div class="page-header">
+    <div class="back-btn" id="recap-back-btn" onclick="goBackFromRecap()">←</div>
+    <h2>Sermon Recap</h2>
+  </div>
+  <div class="recap-body">
+    <p class="recap-sermon-title" id="recap-title"></p>
+    <p class="recap-sermon-meta" id="recap-meta"></p>
+    <div id="recap-content"></div>
+    <button class="next-sermon-btn" onclick="loadRandomRecap()">↻ Try another sermon</button>
+  </div>
+</div>
+
+<!-- LIBRARY -->
+<div id="library" class="screen">
+  <div class="top-bar">
+    <div class="top-bar-left"><h1>Library</h1><p>All your sermons</p></div>
+  </div>
+  <div class="library-body">
+    <div class="search-bar">
+      <span>🔍</span>
+      <input type="text" id="search-input" placeholder="Search by preacher, topic, scripture…" oninput="searchSermons(this.value)"/>
+    </div>
+    <div id="library-list"></div>
+  </div>
+  <button class="fab" onclick="showScreen('new-sermon')">🎙</button>
+  <nav class="bottom-nav">
+    <button class="nav-item" onclick="switchTab('dashboard',this)"><span class="nav-icon">🏠</span>Home</button>
+    <button class="nav-item active" onclick="switchTab('library',this)"><span class="nav-icon">📚</span>Library</button>
+    <button class="nav-item" onclick="switchTab('profile-screen',this)"><span class="nav-icon">👤</span>Profile</button>
+  </nav>
+</div>
+
+<!-- PROFILE -->
+<div id="profile-screen" class="screen">
+  <div class="top-bar"><div class="top-bar-left"><h1>Profile</h1></div></div>
+  <div class="profile-body">
+    <div class="profile-avatar" id="profile-avatar">E</div>
+    <p class="profile-name" id="profile-name">Emmanuel</p>
+    <p class="profile-email" id="profile-email">user@email.com</p>
+    <div class="settings-group">
+      <h3>Notifications</h3>
+      <div class="settings-row">
+        <div class="settings-row-left"><span class="settings-row-icon">🔔</span><div><div class="settings-row-label">Weekly Sermon Recap</div><div class="settings-row-sub">Every Sunday morning</div></div></div>
+        <div class="toggle on" id="toggle-recap" onclick="toggleRecap(this)"></div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-left"><span class="settings-row-icon">📖</span><div><div class="settings-row-label">Daily Scripture</div><div class="settings-row-sub">Morning verse from your sermons</div></div></div>
+        <div class="toggle" id="toggle-scripture" onclick="toggleSetting(this)"></div>
+      </div>
+    </div>
+    <div class="settings-group">
+      <h3>Account</h3>
+      <div class="settings-row" style="cursor:pointer;display:none;" id="install-hint" onclick="showInstallGuide()">
+        <div class="settings-row-left"><span class="settings-row-icon">📲</span><div><div class="settings-row-label">Install App</div><div class="settings-row-sub">Add SermonVault to home screen</div></div></div>
+        <span style="color:var(--gold);font-size:18px;">›</span>
+      </div>
+      <div class="settings-row" style="cursor:pointer;" onclick="requestNotificationPermission()">
+        <div class="settings-row-left"><span class="settings-row-icon">🔔</span><div><div class="settings-row-label">Enable Push Notifications</div><div class="settings-row-sub">Required for sermon recaps</div></div></div>
+        <span style="color:var(--gold);font-size:18px;">›</span>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-left"><span class="settings-row-icon">📊</span><div><div class="settings-row-label">Total Sermons</div></div></div>
+        <span id="total-sermons-count" style="color:var(--gold);font-weight:700;font-size:18px;">0</span>
+      </div>
+    </div>
+    <button class="signout-btn" onclick="handleSignout()">Sign Out</button>
+  </div>
+  <nav class="bottom-nav">
+    <button class="nav-item" onclick="switchTab('dashboard',this)"><span class="nav-icon">🏠</span>Home</button>
+    <button class="nav-item" onclick="switchTab('library',this)"><span class="nav-icon">📚</span>Library</button>
+    <button class="nav-item active" onclick="switchTab('profile-screen',this)"><span class="nav-icon">👤</span>Profile</button>
+  </nav>
+</div>
+
+<!-- SHARE CARD MODAL -->
+<div class="modal-overlay" id="share-modal">
+  <div class="modal">
+    <div class="modal-top">
+      <h3>Share Card</h3>
+      <button class="modal-close" onclick="closeShareModal()">✕</button>
+    </div>
+    <canvas id="share-canvas" width="800" height="450"></canvas>
+    <p style="font-size:12px;color:var(--cream-dim);margin-bottom:12px;">Tap a quote to feature it on the card</p>
+    <div class="share-quote-list" id="share-quote-list"></div>
+    <button class="btn-primary" onclick="downloadShareCard()">⬇ Save Image</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Install Banner -->
+<div class="install-banner" id="install-banner">
+  <span style="font-size:28px;">📲</span>
+  <p>Install <span>SermonVault</span> on your home screen for the best experience.</p>
+  <div class="install-banner-btns">
+    <button class="btn-install" id="install-btn">Install</button>
+    <button class="btn-dismiss" onclick="dismissInstall()">Later</button>
+  </div>
+</div>
+
+<!-- Manual Install Guide Modal (fallback for when beforeinstallprompt doesn't fire) -->
+<div class="modal-overlay" id="install-guide-modal">
+  <div class="modal">
+    <div class="modal-top">
+      <h3>📲 Add to Home Screen</h3>
+      <button class="modal-close" onclick="document.getElementById('install-guide-modal').classList.remove('show')">✕</button>
+    </div>
+    <p style="font-size:14px;color:var(--cream-dim);line-height:1.7;margin-bottom:20px;">
+      To install SermonVault as an app on your Android phone:
+    </p>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;gap:14px;align-items:flex-start;">
+        <div style="width:32px;height:32px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--navy);flex-shrink:0;">1</div>
+        <p style="font-size:14px;color:var(--cream);line-height:1.6;">Tap the <strong style="color:var(--gold)">⋮ three-dot menu</strong> in the top-right corner of Chrome</p>
+      </div>
+      <div style="display:flex;gap:14px;align-items:flex-start;">
+        <div style="width:32px;height:32px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--navy);flex-shrink:0;">2</div>
+        <p style="font-size:14px;color:var(--cream);line-height:1.6;">Tap <strong style="color:var(--gold)">"Add to Home screen"</strong></p>
+      </div>
+      <div style="display:flex;gap:14px;align-items:flex-start;">
+        <div style="width:32px;height:32px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--navy);flex-shrink:0;">3</div>
+        <p style="font-size:14px;color:var(--cream);line-height:1.6;">Tap <strong style="color:var(--gold)">"Add"</strong> — SermonVault will appear on your home screen</p>
+      </div>
+    </div>
+    <button class="btn-primary" style="margin-top:24px;" onclick="document.getElementById('install-guide-modal').classList.remove('show')">Got it</button>
+  </div>
+</div>
+
+<!-- ═══════════ FIREBASE ═══════════ -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, query, orderBy, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDoBdEAP1lEM95lQjTw8-nY9oDVpU-PUsc",
+  authDomain: "sermonvault-7bb58.firebaseapp.com",
+  projectId: "sermonvault-7bb58",
+  storageBucket: "sermonvault-7bb58.firebasestorage.app",
+  messagingSenderId: "423392826380",
+  appId: "1:423392826380:web:fa415713583bdeb41c8a29"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Expose to global scope for non-module scripts
+window._auth = auth;
+window._db = db;
+window._fbHelpers = {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  collection, doc, setDoc, getDocs, deleteDoc, query, orderBy, serverTimestamp,
+  updateProfile
+};
+
+// Auth state observer
+onAuthStateChanged(auth, async (user) => {
+  document.getElementById('loading-screen').classList.add('hide');
+  if (user) {
+    window.currentUser = {
+      uid: user.uid,
+      name: user.displayName || 'Friend',
+      email: user.email,
+      church: user.photoURL || ''  // repurpose photoURL to store church name
+    };
+    await window.loadSermons();
+    showScreen('dashboard');
+    renderRecent();
+    renderProfile();
+    updateGreeting();
+    scheduleRecapNotification();
+  } else {
+    window.currentUser = null;
+    showScreen('splash');
+  }
+});
+</script>
+
+<!-- ═══════════ APP LOGIC ═══════════ -->
+<script>
+// ─── CONFIG ───
+// Gemini API key — paste yours between the quotes below
+const _k = 'PASTE_YOUR_GEMINI_KEY_HERE';
+
+// ─── STATE ───
+let sermons = [];
+let recording = false;
+let recognition = null;
+let transcript = '';
+let recTimer = null;
+let recSeconds = 0;
+let mediaRecorder = null;
+let audioChunks = [];
+let audioBlob = null;
+let audioURL = null;
+let currentSermon = null;
+let detailOrigin = 'dashboard';
+let recapOrigin = 'dashboard';
+let shareSermon = null;
+let selectedQuoteIdx = 0;
+let deferredInstallPrompt = null;
+
+// ─── NAVIGATION ───
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+function switchTab(id, btn) {
+  showScreen(id);
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (id === 'library') renderLibrary(sermons);
+  if (id === 'dashboard') { renderRecent(); renderRecapBanner(); }
+  if (id === 'profile-screen') renderProfile();
+}
+function goBackFromDetail() { showScreen(detailOrigin); }
+function goBackFromRecap() { showScreen(recapOrigin); }
+
+// ─── AUTH ───
+async function handleSignup() {
+  const name = document.getElementById('signup-name').value.trim();
+  const church = document.getElementById('signup-church').value.trim();
+  const email = document.getElementById('signup-email').value.trim();
+  const password = document.getElementById('signup-password').value;
+  const errEl = document.getElementById('signup-error');
+  if (!name || !email || !password) { errEl.textContent = 'Please fill in name, email and password.'; errEl.classList.add('show'); return; }
+  if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; errEl.classList.add('show'); return; }
+  errEl.classList.remove('show');
+  const btn = document.getElementById('signup-btn');
+  btn.textContent = 'Creating…'; btn.disabled = true;
+  try {
+    const { user } = await window._fbHelpers.createUserWithEmailAndPassword(window._auth, email, password);
+    await window._fbHelpers.updateProfile(user, { displayName: name, photoURL: church });
+    showToast('Welcome to SermonVault 🎉');
+  } catch(e) {
+    errEl.textContent = e.message.replace('Firebase: ','');
+    errEl.classList.add('show');
+  } finally { btn.textContent = 'Create Account'; btn.disabled = false; }
+}
+
+async function handleLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  if (!email || !password) { errEl.textContent = 'Please enter your email and password.'; errEl.classList.add('show'); return; }
+  errEl.classList.remove('show');
+  const btn = document.getElementById('login-btn');
+  btn.textContent = 'Signing in…'; btn.disabled = true;
+  try {
+    await window._fbHelpers.signInWithEmailAndPassword(window._auth, email, password);
+    showToast('Welcome back 👋');
+  } catch(e) {
+    errEl.textContent = 'Incorrect email or password.';
+    errEl.classList.add('show');
+  } finally { btn.textContent = 'Sign In'; btn.disabled = false; }
+}
+
+async function handleSignout() {
+  await window._fbHelpers.signOut(window._auth);
+  sermons = [];
+  showToast('Signed out');
+}
+
+// ─── FIRESTORE ───
+async function loadSermons() {
+  if (!window.currentUser) return;
+  try {
+    const uid = window.currentUser.uid;
+    const q = window._fbHelpers.query(
+      window._fbHelpers.collection(window._db, 'users', uid, 'sermons'),
+      window._fbHelpers.orderBy('createdAt', 'desc')
+    );
+    const snap = await window._fbHelpers.getDocs(q);
+    sermons = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) { console.error('Load error', e); }
+}
+
+async function saveSermonToFirestore(sermon) {
+  const uid = window.currentUser.uid;
+  const ref = window._fbHelpers.doc(window._db, 'users', uid, 'sermons', sermon.id);
+  await window._fbHelpers.setDoc(ref, sermon);
+}
+
+// ─── GREETING ───
+function updateGreeting() {
+  const h = new Date().getHours();
+  const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  const el = document.getElementById('dash-greeting');
+  if (el && window.currentUser) el.textContent = g + `, ${window.currentUser.name.split(' ')[0]}`;
+}
+
+// ─── RECORDING ───
+function toggleRecording() {
+  if (!recording) startRecording(); else stopRecording();
+}
+
+function startRecording() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    showToast('Use Chrome on Android for voice recording');
+    return;
+  }
+  transcript = '';
+
+  // KEY FIX: On Android Chrome, MediaRecorder and SpeechRecognition
+  // CANNOT share the mic simultaneously — SpeechRecognition loses.
+  // Solution: use SpeechRecognition alone. Skip MediaRecorder entirely.
+  recognition = new SR();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    // Only update UI if we're still in recording state
+    if (recording) {
+      document.getElementById('mic-status').textContent = '🔴 Listening — speak now';
+    }
+  };
+
+  recognition.onresult = (e) => {
+    // CORRECT approach: only process NEW results from e.resultIndex
+    // accumulate finals into transcript, show interim separately
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) {
+        transcript += e.results[i][0].transcript + ' ';
+      }
+    }
+    // Get current interim (last non-final result only)
+    let interimText = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (!e.results[i].isFinal) {
+        interimText += e.results[i][0].transcript;
+      }
+    }
+    const box = document.getElementById('transcript-box');
+    box.innerHTML =
+      '<span style="color:var(--cream)">' + transcript + '</span>' +
+      (interimText ? '<span style="color:rgba(247,242,234,0.45);font-style:italic"> ' + interimText + '</span>' : '');
+    box.classList.add('show');
+    document.getElementById('transcript-label').style.display = 'block';
+    box.scrollTop = box.scrollHeight;
+  };
+
+  recognition.onerror = (e) => {
+    console.warn('SpeechRecognition error:', e.error);
+    if (e.error === 'not-allowed') {
+      showToast('Microphone blocked — allow it in Chrome settings');
+      stopRecording();
+    }
+    // 'no-speech', 'network', 'audio-capture' — don't stop, let onend restart
+  };
+
+  // CRITICAL for Android: Chrome stops recognition after silence or ~60s.
+  // Aggressively restart to keep it truly continuous.
+  recognition.onend = () => {
+    if (recording) {
+      // Short delay prevents "already started" InvalidStateError
+      setTimeout(() => {
+        if (recording) {
+          try {
+            // transcript already accumulated — just restart listening
+            recognition.start();
+          } catch(ex) {
+            if (ex.name !== 'InvalidStateError') {
+              console.warn('Restart failed:', ex.message);
+            }
+          }
+        }
+      }, 100);
+    }
+  };
+
+  // Keep screen awake during recording so Android doesn't kill the mic
+  if (navigator.wakeLock) {
+    navigator.wakeLock.request('screen').then(lock => {
+      window._wakeLock = lock;
+    }).catch(() => {});
+  }
+
+  try {
+    recognition.start();
+  } catch(e) {
+    showToast('Could not start — is another app using the mic?');
+    return;
+  }
+
+  recording = true;
+  recSeconds = 0;
+  recTimer = setInterval(() => {
+    recSeconds++;
+    const m = String(Math.floor(recSeconds / 60)).padStart(2, '0');
+    const s = String(recSeconds % 60).padStart(2, '0');
+    document.getElementById('rec-time').textContent = m + ':' + s;
+  }, 1000);
+
+  document.getElementById('mic-btn').classList.add('recording');
+  document.getElementById('mic-btn').textContent = '⏹️';
+  document.getElementById('mic-ripple').classList.add('pulsing');
+  document.getElementById('mic-status').textContent = 'Starting mic…';
+  document.getElementById('mic-status').classList.add('recording');
+}
+
+function stopRecording() {
+  recording = false; // must be false BEFORE stopping recognition so onend doesn't restart
+  clearInterval(recTimer);
+  if (recognition) {
+    try { recognition.stop(); } catch(e){}
+    recognition = null;
+  }
+  document.getElementById('mic-btn').classList.remove('recording');
+  document.getElementById('mic-btn').textContent = '🎙️';
+  document.getElementById('mic-ripple').classList.remove('pulsing');
+  document.getElementById('mic-status').classList.remove('recording');
+
+  // Release screen wake lock
+  if (window._wakeLock) {
+    window._wakeLock.release().catch(()=>{});
+    window._wakeLock = null;
+  }
+
+  const captured = transcript.trim();
+  if (captured) {
+    document.getElementById('mic-status').textContent = '✓ Captured — tap below to structure';
+    const btn = document.getElementById('process-btn');
+    btn.classList.add('show');
+    // Scroll the button into view so user sees it
+    setTimeout(() => btn.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+  } else {
+    document.getElementById('mic-status').textContent = 'Nothing captured — allow mic & speak clearly';
+  }
+}
+
+function toggleAudioPlayback() {
+  if (!audioURL) return;
+  const btn = document.getElementById('audio-play-btn');
+  if (!window._audioEl) {
+    window._audioEl = new Audio(audioURL);
+    window._audioEl.onended = () => { btn.textContent = '▶'; };
+  }
+  if (window._audioEl.paused) { window._audioEl.play(); btn.textContent = '⏸'; }
+  else { window._audioEl.pause(); btn.textContent = '▶'; }
+}
+
+function deleteAudio() {
+  audioBlob = null; audioURL = null; audioChunks = [];
+  if (window._audioEl) { window._audioEl.pause(); window._audioEl = null; }
+  document.getElementById('audio-bar').classList.remove('show');
+  showToast('Audio removed');
+}
+
+function formatDuration(secs) {
+  return `${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`;
+}
+
+// ─── AI PROCESSING ───
+async function processSermon() {
+  const btn = document.getElementById('process-btn');
+  const preacher = document.getElementById('preacher-name').value.trim() || 'Unknown Preacher';
+  const titleInput = document.getElementById('sermon-title-input').value.trim();
+  if (!transcript.trim()) { showToast('Nothing captured — please record again'); return; }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Structuring with AI…';
+
+  const prompt = `You are a sermon notes assistant. Structure this rough sermon transcript into clean JSON.
+
+Transcript: "${transcript.substring(0, 3000)}"
+Preacher: ${preacher}
+${titleInput ? 'Title hint: ' + titleInput : ''}
+
+Return ONLY valid JSON, no markdown fences:
+{
+  "title": "Sermon title (infer if not given)",
+  "summary": "2-3 sentence summary",
+  "keyPoints": ["point 1", "point 2", "point 3"],
+  "scriptures": ["Book Chapter:Verse", "Book Chapter:Verse"],
+  "takeaways": ["personal reflection 1", "personal reflection 2"],
+  "actionStep": "One concrete thing to do this week",
+  "reflectionPrompt": "A deep personal reflection question based on this sermon"
+}`;
+
+  try {
+    // Check key is set
+    if (!_k || _k === 'sk-ant-api03-') {
+      showToast('⚠️ Add your API key in the config section');
+      btn.disabled = false;
+      btn.innerHTML = '✨ Structure with AI';
+      return;
+    }
+
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${_k}`;
+    const res = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 1200 }
+      })
+    });
+
+    // Show actual API error if not OK
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      const msg = errData?.error?.message || `HTTP ${res.status}`;
+      showToast('API: ' + msg.substring(0, 80));
+      btn.disabled = false;
+      btn.innerHTML = '✨ Structure with AI';
+      return;
+    }
+
+    const data = await res.json();
+
+    // Guard: check response has candidates
+    if (!data.candidates || !data.candidates.length) {
+      showToast('Empty response from AI — try again');
+      btn.disabled = false;
+      btn.innerHTML = '✨ Structure with AI';
+      return;
+    }
+
+    const text = data.candidates[0].content.parts.map(p => p.text||'').join('');
+    const clean = text.replace(/```json|```/g,'').trim();
+    let structured;
+    try {
+      structured = JSON.parse(clean);
+    } catch(parseErr) {
+      showToast('AI response parse error — try again');
+      console.error('Parse error:', clean);
+      btn.disabled = false;
+      btn.innerHTML = '✨ Structure with AI';
+      return;
+    }
+
+    const sermon = {
+      id: Date.now().toString(),
+      preacher,
+      church: window.currentUser?.church || '',
+      date: new Date().toISOString(),
+      createdAt: window._fbHelpers.serverTimestamp(),
+      transcript,
+      audioDataURL: null,
+      ...structured
+    };
+
+    sermons.unshift(sermon);
+    await saveSermonToFirestore(sermon);
+
+    showToast('Sermon structured and saved ✅');
+    openSermonDetail(sermon, 'dashboard');
+    showScreen('sermon-detail');
+    resetNewSermonForm();
+
+  } catch(e) {
+    console.error('processSermon error:', e);
+    showToast('Error: ' + (e.message || 'check console'));
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '✨ Structure with AI';
+    btn.classList.remove('show');
+  }
+}
+
+function resetNewSermonForm() {
+  transcript = '';
+  audioBlob = null; audioURL = null; audioChunks = [];
+  if (window._audioEl) { window._audioEl.pause(); window._audioEl = null; }
+  document.getElementById('transcript-box').textContent = '';
+  document.getElementById('transcript-box').classList.remove('show');
+  document.getElementById('transcript-label').style.display = 'none';
+  document.getElementById('process-btn').classList.remove('show');
+  document.getElementById('audio-bar').classList.remove('show');
+  document.getElementById('preacher-name').value = '';
+  document.getElementById('sermon-title-input').value = '';
+  document.getElementById('rec-time').textContent = '';
+  document.getElementById('mic-status').textContent = 'Tap to start recording';
+}
+
+// ─── SERMON DETAIL ───
+function openSermonDetail(sermon, origin) {
+  currentSermon = sermon;
+  detailOrigin = origin || 'dashboard';
+  document.getElementById('detail-title').textContent = sermon.title || 'Sermon';
+  const d = new Date(sermon.date);
+  document.getElementById('detail-meta').textContent =
+    [sermon.preacher, sermon.church, d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})].filter(Boolean).join(' · ');
+
+  const body = document.getElementById('detail-body');
+  body.innerHTML = '';
+
+  // Audio playback in detail
+  if (sermon.audioDataURL) {
+    body.innerHTML += `<div class="detail-section" style="padding:14px 20px;">
+      <h3>Voice Recording</h3>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+        <button class="audio-play-btn" onclick="toggleDetailAudio('${sermon.id}')">▶</button>
+        <span style="font-size:13px;color:var(--cream-dim);">Tap to play original recording</span>
+      </div>
+    </div>`;
+  }
+
+  if (sermon.summary) {
+    body.innerHTML += `<div class="detail-section"><h3>Summary</h3><p style="font-size:15px;line-height:1.7;color:var(--cream)">${sermon.summary}</p></div>`;
+  }
+  if (sermon.keyPoints?.length) {
+    const pts = sermon.keyPoints.map(p=>`<div class="key-point"><div class="point-dot"></div><p>${p}</p></div>`).join('');
+    body.innerHTML += `<div class="detail-section"><h3>Key Points</h3>${pts}</div>`;
+  }
+  if (sermon.scriptures?.length) {
+    const refs = sermon.scriptures.map((ref,i)=>
+      `<div class="scripture-item">
+        <div class="scripture-ref" onclick="toggleVerse(this,'${ref.replace(/'/g,"\\'")}',${i})">
+          📖 ${ref}<span class="expand-icon">▼</span>
+        </div>
+        <div class="scripture-text" id="verse-${i}"><span class="loading-verse">Tap to load verse…</span></div>
+      </div>`).join('');
+    body.innerHTML += `<div class="detail-section"><h3>Scriptures Referenced</h3>${refs}</div>`;
+  }
+  if (sermon.takeaways?.length) {
+    const takes = sermon.takeaways.map(t=>`<div class="key-point"><div class="point-dot" style="background:var(--purple-light)"></div><p>${t}</p></div>`).join('');
+    body.innerHTML += `<div class="detail-section"><h3>Takeaways</h3>${takes}</div>`;
+  }
+  if (sermon.actionStep) {
+    body.innerHTML += `<div class="detail-section"><h3>This Week's Action</h3><div class="action-step">${sermon.actionStep}</div></div>`;
+  }
+}
+
+function toggleDetailAudio(sermonId) {
+  const sermon = sermons.find(s=>s.id===sermonId);
+  if (!sermon?.audioDataURL) return;
+  if (!window._detailAudio) window._detailAudio = new Audio(sermon.audioDataURL);
+  if (window._detailAudio.paused) window._detailAudio.play();
+  else window._detailAudio.pause();
+}
+
+// ─── BIBLE VERSE LOOKUP (bible-api.com) ───
+const verseCache = {};
+
+async function toggleVerse(el, ref, idx) {
+  const textEl = document.getElementById('verse-' + idx);
+  const isOpen = el.classList.contains('open');
+  if (isOpen) { textEl.classList.remove('show'); el.classList.remove('open'); return; }
+  el.classList.add('open');
+  textEl.classList.add('show');
+  if (verseCache[ref]) { textEl.innerHTML = verseCache[ref]; return; }
+  textEl.innerHTML = '<span class="loading-verse">Loading verse…</span>';
+  try {
+    // bible-api.com accepts refs like "John 3:16", "Romans 8:28"
+    const encoded = encodeURIComponent(ref);
+    const res = await fetch(`https://bible-api.com/${encoded}?translation=kjv`);
+    const data = await res.json();
+    if (data.text) {
+      const verse = data.text.trim();
+      verseCache[ref] = verse;
+      textEl.textContent = verse;
+    } else {
+      throw new Error('Not found');
+    }
+  } catch {
+    // Fallback to Gemini if bible-api fails
+    try {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${_k}`;
+      const res2 = await fetch(geminiUrl, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          contents:[{parts:[{text:`Return only the KJV Bible verse text for ${ref}. No reference label, no extra text, just the verse.`}]}],
+          generationConfig:{temperature:0.1, maxOutputTokens:200}
+        })
+      });
+      const d2 = await res2.json();
+      const v = (d2.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('') || '').trim();
+      verseCache[ref] = v;
+      textEl.textContent = v || 'Verse not found.';
+    } catch { textEl.textContent = 'Could not load verse.'; }
+  }
+}
+
+// ─── RENDER ───
+function formatDate(iso) {
+  return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+}
+
+function renderSermonCard(s, origin) {
+  const tags = (s.scriptures||[]).slice(0,2).map(sc=>`<span class="tag purple">${sc}</span>`).join('');
+  const audio = s.audioDataURL ? `<span class="tag" style="background:rgba(76,175,125,0.15);color:var(--success);border-color:rgba(76,175,125,0.3);">🎵 Audio</span>` : '';
+  return `<div class="sermon-card" onclick="openSermonDetail(sermons.find(x=>x.id==='${s.id}'),'${origin}');showScreen('sermon-detail')">
+    <div class="sermon-card-top">
+      <h3>${s.title||'Untitled Sermon'}</h3>
+      <span class="sermon-date">${formatDate(s.date)}</span>
+    </div>
+    <p class="sermon-meta">${[s.preacher,s.church].filter(Boolean).join(' · ')}</p>
+    ${(tags||audio)?`<div class="sermon-tags">${audio}${tags}</div>`:''}
+  </div>`;
+}
+
+function renderRecent() {
+  const el = document.getElementById('recent-sermons');
+  if (!sermons.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🎙️</div><p>No sermons yet.<br>Tap the mic to record your first one.</p></div>`;
+    return;
+  }
+  el.innerHTML = sermons.slice(0,5).map(s=>renderSermonCard(s,'dashboard')).join('');
+  document.getElementById('total-sermons-count').textContent = sermons.length;
+  renderRecapBanner();
+}
+
+function renderRecapBanner() {
+  const el = document.getElementById('recap-section');
+  if (sermons.length < 2) { el.innerHTML = ''; return; }
+  // Pick a random past sermon (not the latest)
+  const past = sermons.slice(1);
+  const pick = past[Math.floor(Math.random() * past.length)];
+  el.innerHTML = `<div class="section-label">Revisit</div>
+    <div class="recap-banner" onclick="openRecap('${pick.id}','dashboard')">
+      <div class="recap-banner-label">🔁 Sermon Recap</div>
+      <h3>${pick.title||'Untitled Sermon'}</h3>
+      <p>${pick.preacher||''} · ${formatDate(pick.date)}</p>
+      ${pick.reflectionPrompt?`<div class="recap-prompt">${pick.reflectionPrompt}</div>`:''}
+    </div>`;
+}
+
+function renderLibrary(list) {
+  const el = document.getElementById('library-list');
+  if (!list.length) { el.innerHTML = `<div class="empty-state"><div class="empty-icon">📚</div><p>No sermons found.</p></div>`; return; }
+  el.innerHTML = list.map(s=>renderSermonCard(s,'library')).join('');
+}
+
+function searchSermons(q) {
+  if (!q.trim()) { renderLibrary(sermons); return; }
+  const lower = q.toLowerCase();
+  renderLibrary(sermons.filter(s=>
+    (s.title||'').toLowerCase().includes(lower) ||
+    (s.preacher||'').toLowerCase().includes(lower) ||
+    (s.summary||'').toLowerCase().includes(lower) ||
+    (s.scriptures||[]).some(sc=>sc.toLowerCase().includes(lower))
+  ));
+}
+
+function renderProfile() {
+  if (!window.currentUser) return;
+  const n = window.currentUser.name;
+  const initials = n.split(' ').map(x=>x[0]).join('').toUpperCase().slice(0,2);
+  document.getElementById('dash-avatar').textContent = initials[0];
+  document.getElementById('profile-avatar').textContent = initials;
+  document.getElementById('profile-name').textContent = n;
+  document.getElementById('profile-email').textContent = window.currentUser.email;
+  document.getElementById('total-sermons-count').textContent = sermons.length;
+  updateGreeting();
+}
+
+// ─── RECAP SCREEN ───
+function openRecap(sermonId, origin) {
+  recapOrigin = origin || 'dashboard';
+  const sermon = sermons.find(s=>s.id===sermonId);
+  if (!sermon) return;
+  loadRecapContent(sermon);
+  showScreen('recap-screen');
+}
+
+function openRecapFromDetail() {
+  if (!currentSermon) return;
+  recapOrigin = 'sermon-detail';
+  loadRecapContent(currentSermon);
+  showScreen('recap-screen');
+}
+
+function loadRecapContent(sermon) {
+  document.getElementById('recap-title').textContent = sermon.title || 'Untitled Sermon';
+  document.getElementById('recap-meta').textContent = [sermon.preacher, sermon.church, formatDate(sermon.date)].filter(Boolean).join(' · ');
+  const content = document.getElementById('recap-content');
+  content.innerHTML = '';
+
+  // Key point to reflect on
+  const point = sermon.keyPoints?.[Math.floor(Math.random()*sermon.keyPoints.length)] || sermon.summary || '';
+  if (point) {
+    content.innerHTML += `<div class="reflection-card">
+      <h3>📌 Key Point to Revisit</h3>
+      <p>${point}</p>
+    </div>`;
+  }
+
+  // Reflection prompt
+  if (sermon.reflectionPrompt) {
+    content.innerHTML += `<div class="reflection-card">
+      <h3>🤔 Reflection Question</h3>
+      <p>${sermon.reflectionPrompt}</p>
+      <textarea class="reflection-input" placeholder="Write your thoughts here…"></textarea>
+    </div>`;
+  }
+
+  // Action step reminder
+  if (sermon.actionStep) {
+    content.innerHTML += `<div class="reflection-card" style="border-color:rgba(76,175,125,0.3);">
+      <h3>✅ Action Step</h3>
+      <p>${sermon.actionStep}</p>
+    </div>`;
+  }
+
+  // Scripture spotlight
+  if (sermon.scriptures?.length) {
+    const ref = sermon.scriptures[0];
+    content.innerHTML += `<div class="reflection-card" style="border-color:rgba(107,79,142,0.3);">
+      <h3>📖 Scripture to Meditate On</h3>
+      <p style="color:var(--purple-light);font-family:Georgia,serif;">${ref}</p>
+    </div>`;
+  }
+}
+
+function loadRandomRecap() {
+  if (sermons.length === 0) return;
+  const pick = sermons[Math.floor(Math.random()*sermons.length)];
+  loadRecapContent(pick);
+  document.getElementById('recap-title').textContent = pick.title||'Untitled Sermon';
+  document.getElementById('recap-meta').textContent = [pick.preacher, pick.church, formatDate(pick.date)].filter(Boolean).join(' · ');
+}
+
+// ─── SHARE CARD ───
+function openShareModal() {
+  if (!currentSermon) return;
+  shareSermon = currentSermon;
+  selectedQuoteIdx = 0;
+  const modal = document.getElementById('share-modal');
+  modal.classList.add('show');
+
+  // Build quote options
+  const quotes = [
+    ...(shareSermon.keyPoints||[]),
+    shareSermon.actionStep ? '✅ ' + shareSermon.actionStep : null,
+    shareSermon.summary
+  ].filter(Boolean).slice(0,5);
+
+  const list = document.getElementById('share-quote-list');
+  list.innerHTML = quotes.map((q,i)=>
+    `<div class="share-quote-opt ${i===0?'selected':''}" onclick="selectShareQuote(${i})">${q}</div>`
+  ).join('');
+
+  window._shareQuotes = quotes;
+  drawShareCard(quotes[0]);
+}
+
+function selectShareQuote(idx) {
+  selectedQuoteIdx = idx;
+  document.querySelectorAll('.share-quote-opt').forEach((el,i)=>el.classList.toggle('selected',i===idx));
+  drawShareCard(window._shareQuotes[idx]);
+}
+
+function drawShareCard(quote) {
+  const canvas = document.getElementById('share-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  // Background
+  const bg = ctx.createLinearGradient(0,0,W,H);
+  bg.addColorStop(0,'#0D1B2A');
+  bg.addColorStop(1,'#1E3448');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,W,H);
+
+  // Gold accent bar left
+  ctx.fillStyle = '#C9A84C';
+  ctx.fillRect(0,0,6,H);
+
+  // Soft glow center
+  const glow = ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,W*0.4);
+  glow.addColorStop(0,'rgba(201,168,76,0.08)');
+  glow.addColorStop(1,'rgba(201,168,76,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0,0,W,H);
+
+  // Logo
+  ctx.fillStyle = '#C9A84C';
+  ctx.font = 'bold 22px Georgia, serif';
+  ctx.fillText('SermonVault', 40, 48);
+
+  // Divider
+  ctx.strokeStyle = 'rgba(201,168,76,0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(40,60); ctx.lineTo(W-40,60); ctx.stroke();
+
+  // Quote text (word-wrapped)
+  ctx.fillStyle = '#F5F0E8';
+  ctx.font = '500 28px Georgia, serif';
+  const maxW = W - 100, lineH = 40;
+  const words = quote.split(' ');
+  let line = '', lines = [], y = 140;
+  for (const word of words) {
+    const test = line + word + ' ';
+    if (ctx.measureText(test).width > maxW && line) { lines.push(line.trim()); line = word + ' '; }
+    else line = test;
+  }
+  if (line) lines.push(line.trim());
+  const totalH = lines.length * lineH;
+  let startY = (H - totalH) / 2;
+  lines.forEach(l => { ctx.fillText(l, 50, startY); startY += lineH; });
+
+  // Opening quote mark
+  ctx.fillStyle = 'rgba(201,168,76,0.3)';
+  ctx.font = 'bold 80px Georgia';
+  ctx.fillText('"', 32, 120);
+
+  // Sermon info
+  ctx.fillStyle = 'rgba(245,240,232,0.5)';
+  ctx.font = '16px system-ui, sans-serif';
+  const info = [shareSermon.preacher, shareSermon.church, formatDate(shareSermon.date)].filter(Boolean).join(' · ');
+  ctx.fillText(info, 40, H - 36);
+
+  // Title
+  ctx.fillStyle = '#C9A84C';
+  ctx.font = 'italic 16px Georgia, serif';
+  ctx.fillText(shareSermon.title||'', 40, H - 56);
+}
+
+function downloadShareCard() {
+  const canvas = document.getElementById('share-canvas');
+  const link = document.createElement('a');
+  link.download = `sermon-${Date.now()}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  showToast('Image saved 🖼');
+}
+
+function closeShareModal() {
+  document.getElementById('share-modal').classList.remove('show');
+}
+
+// ─── SETTINGS ───
+function toggleSetting(el) { el.classList.toggle('on'); }
+function toggleRecap(el) {
+  el.classList.toggle('on');
+  showToast(el.classList.contains('on') ? 'Weekly recap enabled 🔔' : 'Weekly recap disabled');
+  if (el.classList.contains('on')) scheduleRecapNotification();
+}
+
+// ─── NOTIFICATIONS ───
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) { showToast('Notifications not supported'); return; }
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') { showToast('Notifications enabled ✅'); scheduleRecapNotification(); }
+  else showToast('Permission denied');
+}
+
+function scheduleRecapNotification() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  setTimeout(() => {
+    if (sermons.length > 0) {
+      const pick = sermons[Math.floor(Math.random()*sermons.length)];
+      new Notification('SermonVault Recap 📖', {
+        body: `Revisit: "${pick.title||'Your last sermon'}" by ${pick.preacher||'your pastor'}`,
+        icon: 'icons/icon-192.png'
+      });
+    }
+  }, 5000);
+}
+
+// ─── TOAST ───
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ─── PWA INSTALL ───
+// Track if running as installed PWA already
+const isInstalled = window.matchMedia('(display-mode: standalone)').matches
+                 || window.navigator.standalone === true;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if (!isInstalled) {
+    setTimeout(() => {
+      if (deferredInstallPrompt) {
+        document.getElementById('install-banner').classList.add('show');
+      }
+    }, 4000);
+  }
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  dismissInstall();
+  showToast('SermonVault installed! 🎉');
+});
+
+document.getElementById('install-btn').addEventListener('click', async () => {
+  if (!deferredInstallPrompt) {
+    // Fallback: show manual guide
+    document.getElementById('install-guide-modal').classList.add('show');
+    dismissInstall();
+    return;
+  }
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  dismissInstall();
+  if (outcome === 'accepted') showToast('SermonVault installed! 🎉');
+});
+
+function dismissInstall() {
+  document.getElementById('install-banner').classList.remove('show');
+}
+
+function showInstallGuide() {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+  } else {
+    document.getElementById('install-guide-modal').classList.add('show');
+  }
+}
+
+// Show install guide on profile if not already installed
+if (!isInstalled) {
+  setTimeout(() => {
+    const el = document.getElementById('install-hint');
+    if (el) el.style.display = 'flex';
+  }, 500);
+}
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js', { scope: './' })
+    .then(reg => {
+      console.log('SW registered:', reg.scope);
+      // Check for updates
+      reg.addEventListener('updatefound', () => {
+        const worker = reg.installing;
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+            showToast('App updated — refresh for the latest');
+          }
+        });
+      });
+    })
+    .catch(err => console.warn('SW failed:', err));
+}
+</script>
+
+<!-- ═══════════ CHURCH CANVAS ANIMATION ═══════════ -->
+<script>
+(function(){
+  const canvas = document.getElementById('church-canvas');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let W, H, raf = null, t = 0, running = false;
+
+  // ── Particles: dust motes in light beams ──
+  const MOTES = Array.from({length: 90}, () => ({
+    x: Math.random(), y: Math.random(),
+    r: 0.4 + Math.random() * 2.2,
+    vy: -(0.00006 + Math.random() * 0.00018),
+    vx: (Math.random() - 0.5) * 0.00008,
+    alpha: 0.04 + Math.random() * 0.32,
+    phase: Math.random() * Math.PI * 2,
+    twinkleSpeed: 0.0005 + Math.random() * 0.002
+  }));
+
+  // ── Light beams from high stained-glass windows ──
+  const BEAMS = [
+    { x:0.18, angle: 0.22,  w: 0.10, r:255, g:210, b:120, a:0.13 },
+    { x:0.35, angle: 0.10,  w: 0.08, r:201, g:168, b:76,  a:0.10 },
+    { x:0.50, angle: 0.00,  w: 0.16, r:245, g:235, b:200, a:0.15 },
+    { x:0.65, angle:-0.10,  w: 0.08, r:201, g:168, b:76,  a:0.10 },
+    { x:0.82, angle:-0.22,  w: 0.10, r:255, g:210, b:120, a:0.13 },
+    { x:0.28, angle: 0.06,  w: 0.05, r:160, g:120, b:210, a:0.07 },
+    { x:0.72, angle:-0.06,  w: 0.05, r:160, g:120, b:210, a:0.07 },
+  ];
+
+  // ── Congregation figures ──
+  const CROWD = [];
+  function buildCrowd() {
+    CROWD.length = 0;
+    const rows = [
+      { y:0.71, n:8,  sc:1.00 },
+      { y:0.77, n:11, sc:0.90 },
+      { y:0.83, n:14, sc:0.80 },
+      { y:0.89, n:16, sc:0.70 },
+    ];
+    rows.forEach(row => {
+      const gap = 1 / (row.n + 1);
+      for(let i = 1; i <= row.n; i++){
+        CROWD.push({
+          x:     i * gap + (Math.random()-0.5) * gap * 0.4,
+          y:     row.y,
+          sc:    row.sc * (0.85 + Math.random()*0.30),
+          swayA: (Math.random()-0.5) * 0.0025,
+          swayF: 0.0004 + Math.random()*0.0004,
+          phase: Math.random()*Math.PI*2,
+          raised: Math.random() < 0.30,
+          raisedR: Math.random() < 0.5,   // which arm
+          headTilt: (Math.random()-0.5)*0.18,
+        });
+      }
+    });
+  }
+
+  // ── Candles ──
+  const CANDLES = [
+    {x:0.05,y:0.58},{x:0.10,y:0.61},{x:0.16,y:0.59},
+    {x:0.84,y:0.59},{x:0.90,y:0.61},{x:0.95,y:0.58},
+    {x:0.48,y:0.50},{x:0.52,y:0.50},
+  ];
+
+  // ── Fireflies / blessing sparks that float up ──
+  const SPARKS = Array.from({length:18},()=>({
+    x: Math.random(), y: 0.6 + Math.random()*0.4,
+    r: 0.8 + Math.random()*1.5,
+    vy: -(0.00010 + Math.random()*0.00025),
+    vx: (Math.random()-0.5)*0.00006,
+    alpha: 0.5 + Math.random()*0.5,
+    phase: Math.random()*Math.PI*2,
+    color: Math.random()<0.6 ? [255,200,80] : [201,168,76]
+  }));
+
+  function resize(){
+    W = canvas.width  = canvas.offsetWidth  || window.innerWidth;
+    H = canvas.height = canvas.offsetHeight || window.innerHeight;
+    buildCrowd();
+  }
+
+  /* ── BG: deep sanctuary gradient ── */
+  function drawBG(){
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,   '#020609');
+    g.addColorStop(0.30,'#07111d');
+    g.addColorStop(0.65,'#0c1e30');
+    g.addColorStop(1,   '#040b14');
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  }
+
+  /* ── Stained-glass window glow at the very top ── */
+  function drawWindows(){
+    const winData = [
+      {x:0.18,r:70,g:50,b:160},{x:0.35,r:200,g:60,b:60},
+      {x:0.50,r:201,g:168,b:76},{x:0.65,r:60,g:160,b:80},
+      {x:0.82,r:160,g:60,b:180}
+    ];
+    const pulse = 0.8 + 0.2*Math.sin(t*0.00035);
+    winData.forEach(w => {
+      const cx=w.x*W, cy=H*0.01, rad=W*0.10*pulse;
+      const g = ctx.createRadialGradient(cx,cy,0,cx,cy,rad);
+      g.addColorStop(0, `rgba(${w.r},${w.g},${w.b},0.28)`);
+      g.addColorStop(0.5,`rgba(${w.r},${w.g},${w.b},0.08)`);
+      g.addColorStop(1, `rgba(${w.r},${w.g},${w.b},0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(cx-rad, 0, rad*2, H*0.35);
+    });
+  }
+
+  /* ── Stained-glass tracery lines ── */
+  function drawTracery(){
+    ctx.save();
+    ctx.strokeStyle = 'rgba(201,168,76,0.12)';
+    ctx.lineWidth = 1;
+    const cx=W*0.5, top=H*0.01;
+    // Tall pointed arch (outer)
+    const aW=W*0.42, aH=H*0.50;
+    ctx.beginPath();
+    ctx.moveTo(cx-aW/2, H*0.68);
+    ctx.lineTo(cx-aW/2, top+aH*0.45);
+    ctx.bezierCurveTo(cx-aW/2,top, cx-aW*0.1,top*0.5, cx,top);
+    ctx.bezierCurveTo(cx+aW*0.1,top*0.5, cx+aW/2,top, cx+aW/2,top+aH*0.45);
+    ctx.lineTo(cx+aW/2, H*0.68);
+    ctx.stroke();
+    // Inner arch
+    const iW=aW*0.55;
+    ctx.beginPath();
+    ctx.moveTo(cx-iW/2, H*0.68);
+    ctx.lineTo(cx-iW/2, top+aH*0.52);
+    ctx.bezierCurveTo(cx-iW/2,top+H*0.04, cx,top+H*0.02, cx,top+H*0.04);
+    ctx.bezierCurveTo(cx,top+H*0.02, cx+iW/2,top+H*0.04, cx+iW/2,top+aH*0.52);
+    ctx.lineTo(cx+iW/2, H*0.68);
+    ctx.stroke();
+    // Rose window circle at top of arch
+    ctx.beginPath();
+    ctx.arc(cx, top+H*0.06, W*0.045, 0, Math.PI*2);
+    ctx.stroke();
+    // Rose window spokes
+    for(let i=0;i<8;i++){
+      const a=i*Math.PI/4;
+      ctx.beginPath();
+      ctx.moveTo(cx,top+H*0.06);
+      ctx.lineTo(cx+Math.cos(a)*W*0.045, top+H*0.06+Math.sin(a)*W*0.045);
+      ctx.stroke();
+    }
+    // Side columns
+    ctx.strokeStyle='rgba(201,168,76,0.07)';
+    [[0.06,0.30],[0.94,0.30]].forEach(([x,w])=>{
+      ctx.beginPath();
+      ctx.rect(x*W-w*W*0.5, H*0.15, w*W, H*0.55);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  /* ── Glowing cross on altar ── */
+  function drawCross(){
+    const cx=W*0.5, cy=H*0.30;
+    const pulse = 0.6 + 0.4*Math.sin(t*0.00070);
+    const vH=H*0.16, hW=W*0.08, lw=Math.max(3,W*0.012);
+    ctx.save();
+    // Outer bloom
+    ctx.shadowColor = `rgba(255,210,100,${0.7*pulse})`;
+    ctx.shadowBlur = 36*pulse;
+    ctx.strokeStyle = `rgba(255,215,110,${0.55*pulse})`;
+    ctx.lineWidth = lw*1.8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx,cy-vH/2); ctx.lineTo(cx,cy+vH/2);
+    ctx.moveTo(cx-hW/2,cy-vH*0.18); ctx.lineTo(cx+hW/2,cy-vH*0.18);
+    ctx.stroke();
+    // Bright core
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = `rgba(255,235,160,${0.85*pulse})`;
+    ctx.lineWidth = lw*0.6;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy-vH/2); ctx.lineTo(cx,cy+vH/2);
+    ctx.moveTo(cx-hW/2,cy-vH*0.18); ctx.lineTo(cx+hW/2,cy-vH*0.18);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /* ── Light beams ── */
+  function drawBeams(){
+    const globalPulse = 0.88 + 0.12*Math.sin(t*0.00040);
+    BEAMS.forEach((b,bi)=>{
+      const x0=b.x*W, halfW=b.w*W*0.5, len=H*0.98;
+      const beamPulse = globalPulse * (0.90 + 0.10*Math.sin(t*0.00060+bi));
+      ctx.save();
+      ctx.translate(x0,0);
+      ctx.rotate(b.angle);
+      const g=ctx.createLinearGradient(0,0,0,len);
+      g.addColorStop(0,   `rgba(${b.r},${b.g},${b.b},${b.a*beamPulse})`);
+      g.addColorStop(0.45,`rgba(${b.r},${b.g},${b.b},${b.a*0.55*beamPulse})`);
+      g.addColorStop(0.80,`rgba(${b.r},${b.g},${b.b},${b.a*0.18*beamPulse})`);
+      g.addColorStop(1,   `rgba(${b.r},${b.g},${b.b},0)`);
+      ctx.fillStyle=g;
+      ctx.beginPath();
+      ctx.moveTo(-halfW*0.05, 0);
+      ctx.lineTo(-halfW, len);
+      ctx.lineTo(halfW, len);
+      ctx.lineTo(halfW*0.05, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  /* ── Altar glow on floor ── */
+  function drawFloorGlow(){
+    const pulse = 0.7 + 0.3*Math.sin(t*0.00055);
+    // Central altar glow
+    const g1=ctx.createRadialGradient(W*0.5,H*0.68,0,W*0.5,H*0.68,W*0.40);
+    g1.addColorStop(0,`rgba(201,168,76,${0.14*pulse})`);
+    g1.addColorStop(0.5,`rgba(201,168,76,${0.05*pulse})`);
+    g1.addColorStop(1,'rgba(201,168,76,0)');
+    ctx.fillStyle=g1; ctx.fillRect(0,H*0.50,W,H*0.50);
+    // Floor reflection
+    const g2=ctx.createLinearGradient(0,H*0.88,0,H);
+    g2.addColorStop(0,`rgba(201,140,50,${0.10*pulse})`);
+    g2.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g2; ctx.fillRect(0,H*0.88,W,H*0.12);
+  }
+
+  /* ── Candle flames ── */
+  function drawCandles(){
+    CANDLES.forEach((c,ci)=>{
+      const cx=c.x*W, cy=c.y*H;
+      const flicker = 0.6+0.4*Math.sin(t*0.005+ci*1.7+Math.sin(t*0.013+ci));
+      const rad = W*0.055*flicker;
+      // Warm halo
+      const g=ctx.createRadialGradient(cx,cy,0,cx,cy,rad);
+      g.addColorStop(0,   `rgba(255,180,50,${0.50*flicker})`);
+      g.addColorStop(0.3, `rgba(255,140,20,${0.22*flicker})`);
+      g.addColorStop(0.7, `rgba(255,100,0,${0.07*flicker})`);
+      g.addColorStop(1,   'rgba(255,80,0,0)');
+      ctx.fillStyle=g;
+      ctx.beginPath(); ctx.arc(cx,cy,rad,0,Math.PI*2); ctx.fill();
+      // Candle body
+      ctx.fillStyle=`rgba(255,240,200,${0.85*flicker})`;
+      ctx.beginPath(); ctx.arc(cx,cy,Math.max(1.5,W*0.003),0,Math.PI*2); ctx.fill();
+      // Flame teardrop
+      ctx.save();
+      ctx.translate(cx, cy-W*0.004);
+      ctx.fillStyle=`rgba(255,220,100,${0.9*flicker})`;
+      ctx.beginPath();
+      ctx.moveTo(0,-W*0.009*flicker);
+      ctx.bezierCurveTo(W*0.003,-W*0.005, W*0.003,W*0.004, 0,W*0.004);
+      ctx.bezierCurveTo(-W*0.003,W*0.004,-W*0.003,-W*0.005, 0,-W*0.009*flicker);
+      ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  /* ── Draw one congregation figure ── */
+  function drawFigure(fig){
+    const px = fig.x*W;
+    const py = fig.y*H;
+    const sz = fig.sc * Math.min(W,H) * 0.032;
+    const sway = Math.sin(t*fig.swayF + fig.phase)*fig.swayA*W;
+    // depth: further back = darker and smaller
+    const depthAlpha = 0.25 + (fig.y-0.70)*1.20;
+
+    ctx.save();
+    ctx.translate(px+sway, py);
+
+    // Body fill — silhouette
+    const bodyFill = `rgba(5,12,22,${Math.min(0.95,depthAlpha)})`;
+
+    // Torso
+    ctx.fillStyle = bodyFill;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, sz*0.55, sz*1.10, fig.headTilt*0.3, 0, Math.PI*2);
+    ctx.fill();
+
+    // Head
+    ctx.beginPath();
+    ctx.save();
+    ctx.rotate(fig.headTilt);
+    ctx.ellipse(0,-sz*1.55, sz*0.42, sz*0.48, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // Shoulders width
+    ctx.beginPath();
+    ctx.ellipse(0,-sz*0.35, sz*0.72, sz*0.28, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Raised arm in worship
+    if(fig.raised){
+      const armSway = Math.sin(t*0.00065+fig.phase)*0.12;
+      ctx.save();
+      ctx.strokeStyle = bodyFill;
+      ctx.lineWidth = sz*0.28;
+      ctx.lineCap = 'round';
+      const side = fig.raisedR ? 1 : -1;
+      ctx.beginPath();
+      ctx.moveTo(side*sz*0.55, -sz*0.55);
+      ctx.quadraticCurveTo(
+        side*(sz*1.10+armSway*sz), -sz*2.0,
+        side*sz*0.75, -sz*2.8
+      );
+      ctx.stroke();
+      // Hand dot
+      ctx.fillStyle = bodyFill;
+      ctx.beginPath();
+      ctx.arc(side*sz*0.75, -sz*2.8, sz*0.18, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /* ── Dust motes in beams ── */
+  function drawMotes(){
+    MOTES.forEach(m=>{
+      const tw = 0.4+0.6*Math.sin(t*m.twinkleSpeed+m.phase);
+      const grd = ctx.createRadialGradient(m.x*W,m.y*H,0,m.x*W,m.y*H,m.r*2);
+      grd.addColorStop(0,`rgba(245,235,200,${m.alpha*tw})`);
+      grd.addColorStop(1,'rgba(245,235,200,0)');
+      ctx.fillStyle=grd;
+      ctx.beginPath(); ctx.arc(m.x*W,m.y*H,m.r*2,0,Math.PI*2); ctx.fill();
+      m.y+=m.vy; m.x+=m.vx;
+      if(m.y<-0.02){m.y=1.02;m.x=Math.random();}
+      if(m.x<0||m.x>1) m.vx*=-1;
+    });
+  }
+
+  /* ── Golden sparks floating up like a worship moment ── */
+  function drawSparks(){
+    SPARKS.forEach(sp=>{
+      const glow=0.5+0.5*Math.sin(t*0.003+sp.phase);
+      const [r,g,b]=sp.color;
+      const gr=ctx.createRadialGradient(sp.x*W,sp.y*H,0,sp.x*W,sp.y*H,sp.r*3);
+      gr.addColorStop(0,`rgba(${r},${g},${b},${sp.alpha*glow})`);
+      gr.addColorStop(1,`rgba(${r},${g},${b},0)`);
+      ctx.fillStyle=gr;
+      ctx.beginPath(); ctx.arc(sp.x*W,sp.y*H,sp.r*3,0,Math.PI*2); ctx.fill();
+      sp.y+=sp.vy; sp.x+=sp.vx;
+      sp.alpha = Math.max(0, sp.alpha-0.00008);
+      if(sp.y<0.30 || sp.alpha<0.05){
+        sp.y=0.62+Math.random()*0.38;
+        sp.x=Math.random();
+        sp.alpha=0.5+Math.random()*0.5;
+      }
+    });
+  }
+
+  /* ── Vignette ── */
+  function drawVignette(){
+    const v=ctx.createRadialGradient(W/2,H*0.45,H*0.15,W/2,H*0.45,H*0.85);
+    v.addColorStop(0,'rgba(0,0,0,0)');
+    v.addColorStop(0.6,'rgba(0,0,0,0.20)');
+    v.addColorStop(1,'rgba(0,0,0,0.78)');
+    ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
+    // Extra dark bottom strip so buttons are readable
+    const vb=ctx.createLinearGradient(0,H*0.75,0,H);
+    vb.addColorStop(0,'rgba(0,0,0,0)');
+    vb.addColorStop(1,'rgba(0,0,0,0.60)');
+    ctx.fillStyle=vb; ctx.fillRect(0,H*0.75,W,H*0.25);
+  }
+
+  function frame(now){
+    t=now;
+    ctx.clearRect(0,0,W,H);
+    drawBG();
+    drawWindows();
+    drawBeams();
+    drawTracery();
+    drawCross();
+    drawFloorGlow();
+    drawCandles();
+    [...CROWD].sort((a,b)=>a.y-b.y).forEach(drawFigure);
+    drawMotes();
+    drawSparks();
+    drawVignette();
+    raf=requestAnimationFrame(frame);
+  }
+
+  function start(){
+    if(running) return;
+    running=true;
+    resize();
+    raf=requestAnimationFrame(frame);
+  }
+  function stop(){
+    running=false;
+    if(raf){ cancelAnimationFrame(raf); raf=null; }
+  }
+
+  window.addEventListener('resize', resize);
+
+  // Watch for splash becoming active
+  const obs = new MutationObserver(()=>{
+    const splash=document.getElementById('splash');
+    if(splash && splash.classList.contains('active')) start();
+    else stop();
+  });
+  obs.observe(document.getElementById('splash'),{attributes:true,attributeFilter:['class']});
+
+  // KEY FIX: also start immediately if splash is already the active screen
+  // (Firebase auth observer may show splash after load, not before)
+  const checkStart = setInterval(()=>{
+    const splash=document.getElementById('splash');
+    if(splash && splash.classList.contains('active')){ start(); clearInterval(checkStart); }
+    // Also check if auth decided to skip splash (logged-in user)
+    if(document.getElementById('dashboard') && document.getElementById('dashboard').classList.contains('active')){
+      clearInterval(checkStart);
+    }
+  }, 100);
+})();
+</script>
+</body>
+</html>
