@@ -2,7 +2,7 @@
   "name": "SermonVault",
   "short_name": "SermonVault",
   "description": "Capture every sermon by voice. AI turns your words into lasting notes.",
-  "start_url": "./SermonVault-/.",
+  "start_url": "/SermonVault-/",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0D1B2A",
