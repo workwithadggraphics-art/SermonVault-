@@ -776,7 +776,11 @@ function startRecording() {
 }
 
 function stopRecording() {
-  recording = false; // must be false BEFORE stopping recognition so onend doesn't restart
+  // Commit sessionFinal FIRST before anything async fires
+  transcript += sessionFinal;
+  sessionFinal = '';
+
+  recording = false;
   clearInterval(recTimer);
   if (recognition) {
     try { recognition.stop(); } catch(e){}
@@ -793,12 +797,7 @@ function stopRecording() {
     window._wakeLock = null;
   }
 
-  // Commit any remaining session finals
-  if (typeof sessionFinal !== 'undefined' && sessionFinal) {
-    transcript += sessionFinal;
-    sessionFinal = '';
-  }
-
+ 
   const captured = transcript.trim();
   if (captured) {
     document.getElementById('mic-status').textContent = '✓ Captured — tap below to structure';
